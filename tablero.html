@@ -136,6 +136,13 @@
 
       <!-- floating selection toolbar -->
       <div id="selToolbar" class="hidden absolute z-20 bg-slate-900 text-white rounded-lg shadow-lg flex items-center gap-1 p-1">
+        <button id="btnElevationDown" title="Bajar (menos elevación)" class="p-1.5 rounded hover:bg-slate-700">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M6 13l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="btnElevationUp" title="Subir (más elevación)" class="p-1.5 rounded hover:bg-slate-700">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M6 11l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="w-px h-5 bg-slate-700 mx-0.5"></div>
         <button id="btnRotateL" title="Rotar -15°" class="p-1.5 rounded hover:bg-slate-700">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10a8 8 0 1 1 2 5.3" stroke-linecap="round"/><path d="M3 4v6h6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -475,6 +482,35 @@ canvas.on('object:moving', (e) => {
 /* ---------------------------------------------------------
    BUILD & DROP ICONS ONTO THE BOARD
 --------------------------------------------------------- */
+
+/* Volumetric/isometric look: a darker "side face" behind each icon (fake
+   extrusion) plus a drop shadow that grows with "elevation" — the board
+   stays a flat 2D canvas, but objects read as blocks with depth, and
+   "elevación" (see selection toolbar) fakes moving them up off the surface. */
+function shadeColor(hex, percent) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.min(255, ((n >> 16) & 255) + percent));
+  const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + percent));
+  const b = Math.max(0, Math.min(255, (n & 255) + percent));
+  return `rgb(${r},${g},${b})`;
+}
+const ELEVATION_DEPTH = 7;
+function shadowForElevation(level) {
+  return new fabric.Shadow({
+    color: 'rgba(15,23,42,0.4)',
+    blur: 7 + level * 6,
+    offsetX: 3 + level * 3,
+    offsetY: 5 + level * 5,
+  });
+}
+function setElevation(obj, level) {
+  level = Math.max(0, Math.min(4, level));
+  obj.elevation = level;
+  obj.set({ shadow: shadowForElevation(level) });
+  canvas.requestRenderAll();
+  pushHistory();
+}
+
 function buildImageIconGroup(itemDef, left, top, callback) {
   fabric.Image.fromURL(itemDef.imageDataUrl, (img) => {
     const MAX = 80;
@@ -482,19 +518,22 @@ function buildImageIconGroup(itemDef, left, top, callback) {
     img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, originX: 'left', originY: 'top', selectable: false });
     const w = img.width * scale;
     const h = img.height * scale;
+    const sideColor = shadeColor(itemDef.categoryColor || '#64748b', -60);
+    const side = new fabric.Rect({ left: -4 + ELEVATION_DEPTH, top: -4 + ELEVATION_DEPTH, width: w + 8, height: h + 8, rx: 10, ry: 10, fill: sideColor, selectable: false });
     const backing = new fabric.Rect({ left: -4, top: -4, width: w + 8, height: h + 8, rx: 10, ry: 10, fill: '#fff', stroke: 'rgba(0,0,0,0.12)', strokeWidth: 1, selectable: false });
     const label = new fabric.Text(itemDef.name, {
       fontSize: 12, fontFamily: 'Arial, sans-serif', fill: '#1e293b', top: h + 10, left: -4,
       width: w + 8, textAlign: 'center', originX: 'left', selectable: false,
     });
     label.set({ left: (w - label.width) / 2 });
-    const group = new fabric.Group([backing, img, label], {
+    const group = new fabric.Group([side, backing, img, label], {
       left, top, originX: 'center', originY: 'center',
       hasControls: true, hasBorders: true,
       cornerStyle: 'circle', cornerColor: '#0ea5e9', cornerSize: 10, transparentCorners: false,
       borderColor: '#0ea5e9',
+      shadow: shadowForElevation(0),
     });
-    group.set({ itemId: itemDef.id, itemName: itemDef.name });
+    group.set({ itemId: itemDef.id, itemName: itemDef.name, elevation: 0 });
     callback(group);
   }, { crossOrigin: 'anonymous' });
 }
@@ -520,8 +559,9 @@ function addItemToCanvas(itemDef, left, top) {
 
 function buildIconGroup(itemDef, left, top) {
   const color = itemDef.categoryColor;
+  const side = new fabric.Rect({ left: ELEVATION_DEPTH, top: ELEVATION_DEPTH, width: 72, height: 72, rx: 16, ry: 16, fill: shadeColor(color, -60) });
   const badge = new fabric.Rect({ left: 0, top: 0, width: 72, height: 72, rx: 16, ry: 16, fill: color, stroke: 'rgba(0,0,0,0.15)', strokeWidth: 1 });
-  const parts = [badge];
+  const parts = [side, badge];
 
   const glyphPaths = glyphFabricParts(itemDef.shape, color);
   glyphPaths.forEach(p => parts.push(p));
@@ -538,8 +578,9 @@ function buildIconGroup(itemDef, left, top) {
     hasControls: true, hasBorders: true,
     cornerStyle: 'circle', cornerColor: '#0ea5e9', cornerSize: 10, transparentCorners: false,
     borderColor: '#0ea5e9',
+    shadow: shadowForElevation(0),
   });
-  group.set({ itemId: itemDef.id, itemName: itemDef.name });
+  group.set({ itemId: itemDef.id, itemName: itemDef.name, elevation: 0 });
   return group;
 }
 
@@ -692,6 +733,17 @@ canvas.on('object:scaling', positionSelToolbar);
 canvas.on('object:rotating', positionSelToolbar);
 canvas.on('selection:cleared', () => selToolbar.classList.add('hidden'));
 
+document.getElementById('btnElevationUp').addEventListener('click', () => {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  setElevation(obj, (obj.elevation || 0) + 1);
+});
+document.getElementById('btnElevationDown').addEventListener('click', () => {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  setElevation(obj, (obj.elevation || 0) - 1);
+});
+
 document.getElementById('btnRotateL').addEventListener('click', () => rotateActive(-15));
 document.getElementById('btnRotateR').addEventListener('click', () => rotateActive(15));
 function rotateActive(delta) {
@@ -707,7 +759,7 @@ document.getElementById('btnDuplicate').addEventListener('click', () => {
   const obj = canvas.getActiveObject();
   if (!obj) return;
   obj.clone((clone) => {
-    clone.set({ left: obj.left + GRID_SIZE, top: obj.top + GRID_SIZE });
+    clone.set({ left: obj.left + GRID_SIZE, top: obj.top + GRID_SIZE, itemId: obj.itemId, itemName: obj.itemName, elevation: obj.elevation || 0 });
     canvas.add(clone);
     canvas.setActiveObject(clone);
     canvas.requestRenderAll();
@@ -779,7 +831,7 @@ let historyIndex = -1;
 let restoring = false;
 
 function serializeState() {
-  return JSON.stringify(canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented']));
+  return JSON.stringify(canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented', 'elevation']));
 }
 function pushHistory() {
   if (restoring) return;
@@ -1005,7 +1057,7 @@ document.getElementById('btnLogout').addEventListener('click', () => {
 --------------------------------------------------------- */
 document.getElementById('btnSaveFile').addEventListener('click', () => {
   const name = document.getElementById('boardName').value.trim() || 'Proyecto sin título';
-  const data = { app: 'tablero-piscinas', version: 1, name, canvas: canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented']) };
+  const data = { app: 'tablero-piscinas', version: 1, name, canvas: canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented', 'elevation']) };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
