@@ -1336,9 +1336,13 @@ function setActiveTab(tab) {
   else renderQuotesPanel();
 }
 tabBtnProductos.addEventListener('click', () => {
+  const alreadyOnProductos = !viewProductos.classList.contains('hidden');
   setActiveTab('productos');
-  leftPanelCollapsed = true;
-  setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, true);
+  // Al entrar por primera vez desde otra pestaña, ocultar el panel para dar
+  // más espacio al tablero; al hacer clic de nuevo estando ya en "Productos",
+  // alternar (mostrar si estaba oculto, ocultar si estaba visible).
+  leftPanelCollapsed = alreadyOnProductos ? !leftPanelCollapsed : true;
+  setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, leftPanelCollapsed);
 });
 tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
 
