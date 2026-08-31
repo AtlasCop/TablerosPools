@@ -201,6 +201,11 @@
           <input id="itemImageInput" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.svg,image/*" class="text-xs flex-1" />
         </div>
         <p class="text-[10px] text-slate-400 mt-1">Formatos: JPG, PNG, GIF, WEBP, SVG.</p>
+        <button type="button" id="itemConvertPngBtn" class="hidden mt-2 text-xs px-2.5 py-1.5 rounded border border-sky-200 text-sky-600 hover:bg-sky-50 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16h16M4 12l4-4 4 4 4-6 4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Convertir a PNG
+        </button>
+        <p id="itemConvertPngStatus" class="hidden text-[10px] text-emerald-600 mt-1">✓ Imagen convertida a PNG — ese es el archivo que se guardará.</p>
       </div>
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">Código</label>
@@ -1129,12 +1134,14 @@ let itemModalMode = 'add';
 let itemModalCategoryId = null;
 let itemModalEditingItem = null;
 let itemModalImageDataUrl = null;
+let itemModalConvertedFlag = false;
 
 function openItemModal(mode, categoryId, existingItem) {
   itemModalMode = mode;
   itemModalCategoryId = categoryId;
   itemModalEditingItem = existingItem;
   itemModalImageDataUrl = existingItem ? (existingItem.imageDataUrl || null) : null;
+  itemModalConvertedFlag = false;
   itemFormError.classList.add('hidden');
   itemForm.reset();
 
@@ -1155,14 +1162,22 @@ function openItemModal(mode, categoryId, existingItem) {
 
 function closeItemModal() { itemModal.classList.add('hidden'); }
 
+const itemConvertPngBtn = document.getElementById('itemConvertPngBtn');
+const itemConvertPngStatus = document.getElementById('itemConvertPngStatus');
+
 function updateItemImagePreview() {
   if (itemModalImageDataUrl) {
     itemImgPreview.src = itemModalImageDataUrl;
     itemImgPreview.classList.remove('hidden');
     itemImgPlaceholder.classList.add('hidden');
+    const isPng = itemModalImageDataUrl.startsWith('data:image/png');
+    itemConvertPngBtn.classList.toggle('hidden', isPng);
+    itemConvertPngStatus.classList.toggle('hidden', !(isPng && itemModalConvertedFlag));
   } else {
     itemImgPreview.classList.add('hidden');
     itemImgPlaceholder.classList.remove('hidden');
+    itemConvertPngBtn.classList.add('hidden');
+    itemConvertPngStatus.classList.add('hidden');
   }
 }
 
@@ -1178,9 +1193,30 @@ itemImageInput.addEventListener('change', () => {
   const reader = new FileReader();
   reader.onload = () => {
     itemModalImageDataUrl = reader.result;
+    itemModalConvertedFlag = false;
     updateItemImagePreview();
   };
   reader.readAsDataURL(file);
+});
+
+itemConvertPngBtn.addEventListener('click', () => {
+  if (!itemModalImageDataUrl) return;
+  itemFormError.classList.add('hidden');
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth || img.width;
+    c.height = img.naturalHeight || img.height;
+    c.getContext('2d').drawImage(img, 0, 0);
+    itemModalImageDataUrl = c.toDataURL('image/png');
+    itemModalConvertedFlag = true;
+    updateItemImagePreview();
+  };
+  img.onerror = () => {
+    itemFormError.textContent = 'No se pudo convertir la imagen a PNG.';
+    itemFormError.classList.remove('hidden');
+  };
+  img.src = itemModalImageDataUrl;
 });
 
 document.getElementById('itemModalClose').addEventListener('click', closeItemModal);
