@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   html, body { height: 100%; margin: 0; overflow: hidden; }
   #boardWrap { touch-action: none; }
@@ -259,6 +260,12 @@
         <span class="text-xs font-bold text-slate-600 uppercase">Total general</span>
         <span id="quoteGrandTotal" class="text-sm font-bold text-slate-800">$0</span>
       </div>
+      <div class="px-3 pb-3 pt-1 bg-slate-50">
+        <button id="btnGenerateQuoteDoc" class="w-full text-sm font-semibold text-white rounded-xl py-3 flex items-center justify-center gap-2 shadow-lg shadow-sky-500/30 bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 transition-all">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6M9 16h6M9 8h1M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7l-6-4z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Generar cotización
+        </button>
+      </div>
     </aside>
   </div>
 </div>
@@ -279,6 +286,67 @@
       <button id="shareCopyBtn" class="text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium whitespace-nowrap">Copiar</button>
     </div>
     <p id="shareCopiedMsg" class="hidden text-xs text-emerald-600 mt-2">¡Enlace copiado al portapapeles!</p>
+  </div>
+</div>
+
+<!-- QUOTE DOCUMENT MODAL -->
+<div id="quoteDocModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-full max-h-[92vh] flex flex-col overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
+      <h3 class="text-sm font-bold text-slate-800">Cotización para el cliente</h3>
+      <button id="quoteDocModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="flex-1 flex min-h-0 overflow-hidden flex-col md:flex-row">
+      <!-- CLIENT FORM + ACTIONS -->
+      <div class="w-full md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-4 space-y-3 bg-slate-50">
+        <h4 class="text-xs font-bold text-slate-500 uppercase">Datos del cliente</h4>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nombre</label>
+          <input id="quoteClientName" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Nombre del cliente" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Empresa (opcional)</label>
+          <input id="quoteClientCompany" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Teléfono / WhatsApp</label>
+          <input id="quoteClientPhone" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Ej. 3001234567" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Correo electrónico</label>
+          <input id="quoteClientEmail" type="email" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Proyecto / Ciudad (opcional)</label>
+          <input id="quoteClientProject" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nota personalizada (opcional)</label>
+          <textarea id="quoteClientNote" rows="3" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Un mensaje especial para este cliente…"></textarea>
+        </div>
+
+        <div class="pt-2 border-t border-slate-200 space-y-2">
+          <button id="btnQuoteDocDownloadPdf" class="w-full text-xs font-semibold text-white rounded-lg py-2.5 bg-slate-800 hover:bg-slate-700 flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Descargar PDF
+          </button>
+          <button id="btnQuoteDocEmail" class="w-full text-xs font-semibold text-white rounded-lg py-2.5 bg-slate-500 hover:bg-slate-400 flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l9 6 9-6M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Enviar por correo
+          </button>
+          <button id="btnQuoteDocWhatsapp" class="w-full text-xs font-semibold text-white rounded-lg py-2.5 bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.92 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.05 2m0 1.67c2.2 0 4.26.86 5.82 2.42a8.19 8.19 0 0 1 2.41 5.82c0 4.55-3.7 8.25-8.24 8.25a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.18 8.18 0 0 1-1.26-4.38c0-4.55 3.7-8.25 8.25-8.25M8.53 6.6c-.16 0-.43.06-.66.31s-.87.86-.87 2.09.9 2.42 1.02 2.58 1.76 2.83 4.38 3.86c2.17.85 2.61.68 3.08.64s1.52-.62 1.74-1.22.22-1.11.15-1.22-.25-.17-.53-.31-1.63-.8-1.88-.9-.44-.13-.62.14-.7.9-.86 1.08-.32.2-.6.07-1.16-.43-2.2-1.36c-.82-.73-1.36-1.63-1.53-1.9s-.02-.43.12-.57c.13-.13.29-.34.43-.5s.19-.28.29-.47.05-.35-.02-.5-.62-1.5-.86-2.04-.46-.47-.63-.48h-.36z"/></svg>
+            Enviar por WhatsApp
+          </button>
+          <p id="quoteDocSendNote" class="text-[10px] text-slate-400 leading-snug pt-1">Correo y WhatsApp abren un mensaje ya redactado — el PDF se descarga aparte, adjúntalo tú mismo en el correo o el chat antes de enviarlo.</p>
+        </div>
+      </div>
+
+      <!-- LIVE PREVIEW -->
+      <div class="flex-1 overflow-y-auto bg-slate-200 p-4 md:p-6 flex justify-center items-start">
+        <div id="quoteDocPreview" class="bg-white shadow-xl shrink-0" style="width:800px; max-width:100%;"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1048,11 +1116,10 @@ function formatCOP(n) { return '$' + Math.round(n || 0).toLocaleString('es-CO');
 --------------------------------------------------------- */
 let quoteQtyOverrides = {};
 
-function rebuildQuote() {
-  const quoteBody = document.getElementById('quoteBody');
-  const quoteGrandTotal = document.getElementById('quoteGrandTotal');
-  quoteBody.innerHTML = '';
-
+/* Compartido entre el panel lateral (siempre muestra las 27 categorías) y
+   el documento de cotización final (solo muestra las que tienen algo) —
+   una sola fuente de verdad para "qué hay en el tablero, agrupado". */
+function computeQuoteByCategory() {
   const counts = {};
   canvas.getObjects().forEach(obj => {
     if (!obj.itemId || !CUSTOM_ITEMS_BY_ID[obj.itemId]) return; // not a real inventory item
@@ -1068,6 +1135,15 @@ function rebuildQuote() {
     const qcId = QUOTE_CATEGORY_BY_ID[dbItem.quoteCategory] ? dbItem.quoteCategory : 'otros-q';
     (byCategory[qcId] = byCategory[qcId] || []).push({ dbItem, qty, itemId: id });
   });
+  return byCategory;
+}
+
+function rebuildQuote() {
+  const quoteBody = document.getElementById('quoteBody');
+  const quoteGrandTotal = document.getElementById('quoteGrandTotal');
+  quoteBody.innerHTML = '';
+
+  const byCategory = computeQuoteByCategory();
 
   // Fijas: las 26/27 categorías siempre se muestran, en este orden, tengan
   // o no objetos todavía — no se ocultan ni reordenan según lo que haya en
@@ -1186,6 +1262,222 @@ function toggleQuotePanel() {
 }
 document.getElementById('quotePanelToggleArrow').addEventListener('click', toggleQuotePanel);
 btnQuoteToggle.addEventListener('click', toggleQuotePanel);
+
+/* ---------------------------------------------------------
+   DOCUMENTO DE COTIZACIÓN — versión elegante para el cliente:
+   logo + datos del cliente + solo las categorías con algo en ellas
+   (a diferencia del panel lateral, que las deja todas fijas para
+   uso interno). Se renderiza como HTML normal para la vista previa
+   en vivo, y esa misma vista se convierte a PDF con html2canvas +
+   jsPDF (igual técnica que la exportación PNG→PDF del tablero:
+   JPEG antes de addImage, no PNG crudo, para no inflar el archivo).
+--------------------------------------------------------- */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+function firstNameOf(fullName) { return (fullName || '').trim().split(/\s+/)[0] || ''; }
+function greeting(fullName) { const n = firstNameOf(fullName); return n ? `Hola ${n}` : 'Hola'; }
+
+function buildQuoteDocHTML() {
+  const clientName = document.getElementById('quoteClientName').value.trim();
+  const clientCompany = document.getElementById('quoteClientCompany').value.trim();
+  const clientPhone = document.getElementById('quoteClientPhone').value.trim();
+  const clientEmail = document.getElementById('quoteClientEmail').value.trim();
+  const clientProject = document.getElementById('quoteClientProject').value.trim();
+  const clientNote = document.getElementById('quoteClientNote').value.trim();
+
+  const byCategory = computeQuoteByCategory();
+  let grandTotal = 0;
+  let categoriesHtml = '';
+  QUOTE_CATEGORIES.forEach(qc => {
+    const rows = byCategory[qc.id];
+    if (!rows || !rows.length) return;
+    const isOptional = qc.label.toLowerCase().includes('(opcional)');
+    let subtotal = 0;
+    const rowsHtml = rows.map(({ dbItem, qty }) => {
+      const unit = dbItem.priceNoTax || 0;
+      const total = unit * qty;
+      subtotal += total;
+      const img = dbItem.imageDataUrl
+        ? `<img src="${dbItem.imageDataUrl}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;border:1px solid #e2e8f0;" />`
+        : `<div style="width:32px;height:32px;border-radius:6px;background:#f1f5f9;"></div>`;
+      return `<tr style="border-top:1px solid #f1f5f9;">
+        <td style="padding:6px 8px;">${img}</td>
+        <td style="padding:6px 8px;color:#64748b;font-family:monospace;font-size:10px;white-space:nowrap;">${escapeHtml(dbItem.code)}</td>
+        <td style="padding:6px 8px;">
+          <div style="font-weight:600;">${escapeHtml(dbItem.name)}</div>
+          ${dbItem.subline ? `<div style="font-size:9px;color:#94a3b8;">${escapeHtml(dbItem.subline)}</div>` : ''}
+        </td>
+        <td style="padding:6px 8px;text-align:center;">${qty}</td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b;white-space:nowrap;">${formatCOP(unit)}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:bold;white-space:nowrap;">${formatCOP(total)}</td>
+      </tr>`;
+    }).join('');
+    grandTotal += subtotal;
+    categoriesHtml += `
+      <div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <div style="background:${isOptional ? '#fb923c' : '#38bdf8'};color:#fff;font-weight:bold;font-size:11px;text-transform:uppercase;padding:9px 14px;">${escapeHtml(qc.label)}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="background:#f8fafc;color:#64748b;font-size:9px;text-transform:uppercase;">
+              <th style="padding:6px 8px;width:44px;"></th>
+              <th style="padding:6px 8px;text-align:left;">Código</th>
+              <th style="padding:6px 8px;text-align:left;">Descripción</th>
+              <th style="padding:6px 8px;text-align:center;">Cant.</th>
+              <th style="padding:6px 8px;text-align:right;">V. unitario</th>
+              <th style="padding:6px 8px;text-align:right;">V. total</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <div style="text-align:right;padding:8px 14px;background:#f8fafc;font-size:11px;font-weight:bold;color:#475569;">Subtotal: ${formatCOP(subtotal)}</div>
+      </div>`;
+  });
+
+  if (!categoriesHtml) {
+    categoriesHtml = `<div style="text-align:center;padding:40px 10px;color:#94a3b8;font-size:13px;">Aún no has agregado objetos con precio al tablero.</div>`;
+  }
+
+  const today = new Date();
+  const fechaStr = today.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+  const quoteNumber = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}-${String(today.getHours()).padStart(2, '0')}${String(today.getMinutes()).padStart(2, '0')}`;
+
+  return `
+    <div style="font-family: Arial, Helvetica, sans-serif; color:#1e293b; width:800px;">
+      <div style="background:linear-gradient(135deg,#0ea5e9,#0369a1); padding:28px 40px; display:flex; align-items:center; justify-content:space-between; color:#fff;">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <img src="assets/logo.png" style="width:56px;height:56px;" />
+          <div>
+            <div style="font-size:19px;font-weight:bold;">Tablero Piscinas &amp; Spas</div>
+            <div style="font-size:10px;opacity:0.85;">Diseño e implementación de piscinas y spas</div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:20px;font-weight:bold;letter-spacing:0.5px;">COTIZACIÓN</div>
+          <div style="font-size:10px;opacity:0.85;">N.° ${quoteNumber} · ${fechaStr}</div>
+        </div>
+      </div>
+      <div style="padding:26px 40px 34px;">
+        <div style="display:flex; justify-content:space-between; gap:24px; margin-bottom:20px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;color:#94a3b8;font-weight:bold;letter-spacing:0.5px;">Preparado para</div>
+            <div style="font-size:14px;font-weight:bold;">${escapeHtml(clientName) || 'Cliente'}</div>
+            ${clientCompany ? `<div style="font-size:11px;color:#475569;">${escapeHtml(clientCompany)}</div>` : ''}
+            ${clientProject ? `<div style="font-size:11px;color:#475569;">${escapeHtml(clientProject)}</div>` : ''}
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:9px;text-transform:uppercase;color:#94a3b8;font-weight:bold;letter-spacing:0.5px;">Contacto</div>
+            ${clientPhone ? `<div style="font-size:11px;color:#475569;">${escapeHtml(clientPhone)}</div>` : ''}
+            ${clientEmail ? `<div style="font-size:11px;color:#475569;">${escapeHtml(clientEmail)}</div>` : ''}
+          </div>
+        </div>
+        <p style="font-size:12px;line-height:1.6;color:#334155;margin:0 0 22px;">
+          Hola${clientName ? ' ' + escapeHtml(firstNameOf(clientName)) : ''}, gracias por darnos la oportunidad de acompañarte en este proyecto.
+          Diseñamos cada detalle pensando en crear un espacio que disfrutes por muchos años.
+          A continuación encontrarás el detalle de los equipos y servicios incluidos en tu propuesta.
+        </p>
+        ${clientNote ? `<div style="background:#f0f9ff;border-left:3px solid #0ea5e9;padding:10px 14px;border-radius:0 8px 8px 0;font-size:11px;color:#334155;margin-bottom:22px;font-style:italic;">${escapeHtml(clientNote)}</div>` : ''}
+        ${categoriesHtml}
+        <div style="margin-top:6px; display:flex; justify-content:flex-end;">
+          <div style="width:260px;">
+            <div style="display:flex;justify-content:space-between;padding:13px 18px;background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#fff;border-radius:10px;">
+              <span style="font-weight:bold;font-size:13px;">TOTAL GENERAL</span>
+              <span style="font-weight:bold;font-size:15px;">${formatCOP(grandTotal)}</span>
+            </div>
+            <div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:4px;">Precios no incluyen IVA</div>
+          </div>
+        </div>
+        <div style="margin-top:32px;padding-top:18px;border-top:1px solid #e2e8f0;text-align:center;">
+          <div style="font-size:12px;font-weight:bold;color:#0ea5e9;margin-bottom:4px;">¡Hagamos realidad tu piscina o spa soñado!</div>
+          <div style="font-size:9px;color:#94a3b8;">Cotización válida por 30 días · iconsultoriaygestion@gmail.com</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderQuoteDocPreview() {
+  document.getElementById('quoteDocPreview').innerHTML = buildQuoteDocHTML();
+}
+
+const quoteDocModal = document.getElementById('quoteDocModal');
+document.getElementById('btnGenerateQuoteDoc').addEventListener('click', () => {
+  quoteDocModal.classList.remove('hidden');
+  renderQuoteDocPreview();
+});
+document.getElementById('quoteDocModalClose').addEventListener('click', () => quoteDocModal.classList.add('hidden'));
+quoteDocModal.addEventListener('click', (e) => { if (e.target === quoteDocModal) quoteDocModal.classList.add('hidden'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !quoteDocModal.classList.contains('hidden')) quoteDocModal.classList.add('hidden'); });
+['quoteClientName', 'quoteClientCompany', 'quoteClientPhone', 'quoteClientEmail', 'quoteClientProject', 'quoteClientNote'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderQuoteDocPreview);
+});
+
+function generateQuotePdf() {
+  const preview = document.getElementById('quoteDocPreview');
+  return html2canvas(preview, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(canvas => {
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    while (heightLeft > 0) {
+      position -= pageHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+    return pdf;
+  });
+}
+
+function quotePdfFileName() {
+  const name = (document.getElementById('quoteClientName').value.trim() || 'cliente').replace(/\s+/g, '_');
+  return `Cotizacion_${name}.pdf`;
+}
+
+function withBusyButton(btn, busyLabel, fn) {
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = busyLabel;
+  return fn().finally(() => { btn.disabled = false; btn.innerHTML = original; });
+}
+
+document.getElementById('btnQuoteDocDownloadPdf').addEventListener('click', function() {
+  withBusyButton(this, 'Generando…', () => generateQuotePdf().then(pdf => pdf.save(quotePdfFileName())));
+});
+
+document.getElementById('btnQuoteDocEmail').addEventListener('click', function() {
+  const email = document.getElementById('quoteClientEmail').value.trim();
+  if (!email) { alert('Escribe primero el correo del cliente.'); return; }
+  withBusyButton(this, 'Generando…', () => generateQuotePdf().then(pdf => {
+    pdf.save(quotePdfFileName());
+    const clientName = document.getElementById('quoteClientName').value.trim();
+    const subject = encodeURIComponent(`Cotización — ${clientName || 'tu proyecto'}`);
+    const body = encodeURIComponent(`${greeting(clientName)},\n\nAdjunto la cotización de tu proyecto de piscina/spa (el archivo PDF se acaba de descargar en tu computador — adjúntalo a este correo).\n\nCualquier duda, quedo atento.\n\nSaludos.`);
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+  }));
+});
+
+document.getElementById('btnQuoteDocWhatsapp').addEventListener('click', function() {
+  const rawPhone = document.getElementById('quoteClientPhone').value.trim();
+  if (!rawPhone) { alert('Escribe primero el teléfono del cliente.'); return; }
+  withBusyButton(this, 'Generando…', () => generateQuotePdf().then(pdf => {
+    pdf.save(quotePdfFileName());
+    const digits = rawPhone.replace(/\D/g, '');
+    const withCountry = digits.length === 10 ? '57' + digits : digits;
+    const clientName = document.getElementById('quoteClientName').value.trim();
+    const msg = encodeURIComponent(`${greeting(clientName)}, te comparto la cotización de tu proyecto de piscina/spa 🌊 (adjunto el PDF en este chat, se acaba de descargar en tu computador).`);
+    window.open(`https://wa.me/${withCountry}?text=${msg}`, '_blank');
+  }));
+});
 
 /* ---------------------------------------------------------
    SELECTION TOOLBAR (rotate / duplicate / delete)
