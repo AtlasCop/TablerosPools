@@ -172,8 +172,14 @@
     </button>
   </header>
 
+  <!-- VIEW TABS -->
+  <div class="h-10 shrink-0 bg-white border-b border-slate-200 flex items-center gap-1 px-4">
+    <button id="tabBtnProductos" class="text-xs font-semibold px-4 py-2 border-b-2 border-sky-500 text-sky-600 transition-colors">Productos</button>
+    <button id="tabBtnCotizaciones" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Panel Cotizaciones</button>
+  </div>
+
   <!-- MAIN -->
-  <div class="flex-1 flex min-h-0">
+  <div id="viewProductos" class="flex-1 flex min-h-0">
 
     <!-- CATEGORY RAIL -->
     <nav id="catRail" class="w-16 sm:w-20 shrink-0 bg-slate-800 text-white flex flex-col items-stretch overflow-y-auto"></nav>
@@ -267,6 +273,23 @@
         </button>
       </div>
     </aside>
+  </div>
+
+  <!-- PANEL COTIZACIONES (historial de cotizaciones generadas) -->
+  <div id="viewCotizaciones" class="hidden flex-1 overflow-y-auto bg-slate-50 p-6">
+    <div class="max-w-5xl mx-auto">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-bold text-slate-700">Cotizaciones generadas</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Cada vez que descargas, envías por correo o por WhatsApp una cotización, queda guardada aquí.</p>
+        </div>
+        <span id="quotesCountLabel" class="text-xs text-slate-400 shrink-0"></span>
+      </div>
+      <div id="quotesListWrap" class="space-y-3"></div>
+      <div id="quotesEmptyHint" class="hidden text-center text-sm text-slate-400 py-16">
+        Aún no se ha generado ninguna cotización. Ve a la pestaña "Productos", arma el tablero y genera una cotización para verla aquí.
+      </div>
+    </div>
   </div>
 </div>
 
@@ -554,7 +577,7 @@ CATALOG.forEach(cat => { CATEGORY_BY_ID[cat.id] = cat; });
    app) — no hay backend ni servidor propio.
 --------------------------------------------------------- */
 const DB_NAME = 'tablero_piscinas_inventario';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbPromise = null;
 function openDB() {
   if (dbPromise) return dbPromise;
@@ -568,6 +591,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('counters')) {
         db.createObjectStore('counters', { keyPath: 'categoryId' });
+      }
+      if (!db.objectStoreNames.contains('quotes')) {
+        db.createObjectStore('quotes', { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -619,6 +645,30 @@ function idbGetAllItems() {
     const req = tx.objectStore('items').getAll();
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+  }));
+}
+function idbPutQuote(quote) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('quotes', 'readwrite');
+    tx.objectStore('quotes').put(quote);
+    tx.oncomplete = () => resolve(quote);
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+function idbGetAllQuotes() {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('quotes', 'readonly');
+    const req = tx.objectStore('quotes').getAll();
+    req.onsuccess = () => resolve(req.result.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+    req.onerror = () => reject(req.error);
+  }));
+}
+function idbDeleteQuote(id) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('quotes', 'readwrite');
+    tx.objectStore('quotes').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   }));
 }
 
@@ -1264,6 +1314,31 @@ document.getElementById('quotePanelToggleArrow').addEventListener('click', toggl
 btnQuoteToggle.addEventListener('click', toggleQuotePanel);
 
 /* ---------------------------------------------------------
+   PESTAÑAS DE VISTA: "Productos" (todo el flujo de armar el
+   tablero — categorías, tablero, cotización en vivo) vs "Panel
+   Cotizaciones" (historial de cotizaciones ya generadas).
+--------------------------------------------------------- */
+const viewProductos = document.getElementById('viewProductos');
+const viewCotizaciones = document.getElementById('viewCotizaciones');
+const tabBtnProductos = document.getElementById('tabBtnProductos');
+const tabBtnCotizaciones = document.getElementById('tabBtnCotizaciones');
+function setActiveTab(tab) {
+  const isProductos = tab === 'productos';
+  viewProductos.classList.toggle('hidden', !isProductos);
+  viewCotizaciones.classList.toggle('hidden', isProductos);
+  [ [tabBtnProductos, isProductos], [tabBtnCotizaciones, !isProductos] ].forEach(([btn, active]) => {
+    btn.classList.toggle('border-sky-500', active);
+    btn.classList.toggle('text-sky-600', active);
+    btn.classList.toggle('border-transparent', !active);
+    btn.classList.toggle('text-slate-400', !active);
+  });
+  if (isProductos) requestAnimationFrame(resizeCanvas);
+  else renderQuotesPanel();
+}
+tabBtnProductos.addEventListener('click', () => setActiveTab('productos'));
+tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
+
+/* ---------------------------------------------------------
    DOCUMENTO DE COTIZACIÓN — versión elegante para el cliente:
    logo + datos del cliente + solo las categorías con algo en ellas
    (a diferencia del panel lateral, que las deja todas fijas para
@@ -1450,8 +1525,109 @@ function withBusyButton(btn, busyLabel, fn) {
   return fn().finally(() => { btn.disabled = false; btn.innerHTML = original; });
 }
 
+/* ---------------------------------------------------------
+   HISTORIAL DE COTIZACIONES (Panel Cotizaciones) — cada vez que se
+   descarga/envía una cotización se guarda una foto (snapshot) de lo
+   que tenía en ese momento (cliente, categorías, ítems, total) junto
+   con un estado editable: pendiente / autorizada / facturada.
+--------------------------------------------------------- */
+function currentQuoteSnapshot() {
+  const clientName = document.getElementById('quoteClientName').value.trim();
+  const clientCompany = document.getElementById('quoteClientCompany').value.trim();
+  const clientPhone = document.getElementById('quoteClientPhone').value.trim();
+  const clientEmail = document.getElementById('quoteClientEmail').value.trim();
+  const clientProject = document.getElementById('quoteClientProject').value.trim();
+  const clientNote = document.getElementById('quoteClientNote').value.trim();
+
+  const byCategory = computeQuoteByCategory();
+  let grandTotal = 0;
+  const categories = [];
+  QUOTE_CATEGORIES.forEach(qc => {
+    const rows = byCategory[qc.id];
+    if (!rows || !rows.length) return;
+    let subtotal = 0;
+    const items = rows.map(({ dbItem, qty }) => {
+      const unit = dbItem.priceNoTax || 0;
+      const total = unit * qty;
+      subtotal += total;
+      return { code: dbItem.code, name: dbItem.name, subline: dbItem.subline || '', qty, unit, total };
+    });
+    grandTotal += subtotal;
+    categories.push({ label: qc.label, subtotal, items });
+  });
+
+  return {
+    id: 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    createdAt: Date.now(),
+    boardName: document.getElementById('boardName').value.trim() || 'Proyecto sin título',
+    clientName, clientCompany, clientPhone, clientEmail, clientProject, clientNote,
+    categories, grandTotal,
+    status: 'pendiente',
+  };
+}
+
+function saveGeneratedQuote() {
+  return idbPutQuote(currentQuoteSnapshot()).then(renderQuotesPanel);
+}
+
+const QUOTE_STATUSES = [
+  { id: 'pendiente', label: 'Pendiente', activeClass: 'bg-amber-500 text-white', inactiveClass: 'bg-amber-50 text-amber-600 hover:bg-amber-100' },
+  { id: 'autorizada', label: 'Autorizada', activeClass: 'bg-sky-500 text-white', inactiveClass: 'bg-sky-50 text-sky-600 hover:bg-sky-100' },
+  { id: 'facturada', label: 'Facturada', activeClass: 'bg-emerald-500 text-white', inactiveClass: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' },
+];
+
+function renderQuotesPanel() {
+  idbGetAllQuotes().then(quotes => {
+    const wrap = document.getElementById('quotesListWrap');
+    const emptyHint = document.getElementById('quotesEmptyHint');
+    const countLabel = document.getElementById('quotesCountLabel');
+    wrap.innerHTML = '';
+    countLabel.textContent = quotes.length ? `${quotes.length} cotización${quotes.length === 1 ? '' : 'es'}` : '';
+    emptyHint.classList.toggle('hidden', quotes.length > 0);
+
+    quotes.forEach(q => {
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center gap-4 flex-wrap';
+      const dateStr = new Date(q.createdAt).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const itemCount = q.categories.reduce((n, c) => n + c.items.length, 0);
+      card.innerHTML = `
+        <div class="flex-1 min-w-[180px]">
+          <div class="text-sm font-semibold text-slate-800">${escapeHtml(q.clientName) || 'Cliente sin nombre'}</div>
+          <div class="text-[11px] text-slate-400">${escapeHtml(q.boardName)} · ${dateStr}</div>
+        </div>
+        <div class="text-xs text-slate-400 w-24 text-center shrink-0">${itemCount} ítem${itemCount === 1 ? '' : 's'}</div>
+        <div class="text-sm font-bold text-slate-700 w-28 text-right shrink-0">${formatCOP(q.grandTotal)}</div>
+        <div class="js-quote-status-group flex items-center gap-1.5 shrink-0"></div>
+        <button class="js-quote-delete p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 shrink-0" title="Eliminar cotización">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      `;
+      const statusGroup = card.querySelector('.js-quote-status-group');
+      QUOTE_STATUSES.forEach(st => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = st.label;
+        btn.className = 'text-[10px] font-semibold px-2.5 py-1.5 rounded-full transition-colors ' + (q.status === st.id ? st.activeClass : st.inactiveClass);
+        btn.addEventListener('click', () => {
+          q.status = st.id;
+          idbPutQuote(q).then(renderQuotesPanel);
+        });
+        statusGroup.appendChild(btn);
+      });
+      card.querySelector('.js-quote-delete').addEventListener('click', () => {
+        if (!confirm('¿Eliminar esta cotización del historial?')) return;
+        idbDeleteQuote(q.id).then(renderQuotesPanel);
+      });
+      wrap.appendChild(card);
+    });
+  });
+}
+
 document.getElementById('btnQuoteDocDownloadPdf').addEventListener('click', function() {
-  withBusyButton(this, 'Generando…', () => generateQuotePdf().then(pdf => pdf.save(quotePdfFileName())));
+  withBusyButton(this, 'Generando…', () => generateQuotePdf().then(pdf => {
+    pdf.save(quotePdfFileName());
+    saveGeneratedQuote();
+  }));
 });
 
 document.getElementById('btnQuoteDocEmail').addEventListener('click', function() {
@@ -1459,6 +1635,7 @@ document.getElementById('btnQuoteDocEmail').addEventListener('click', function()
   if (!email) { alert('Escribe primero el correo del cliente.'); return; }
   withBusyButton(this, 'Generando…', () => generateQuotePdf().then(pdf => {
     pdf.save(quotePdfFileName());
+    saveGeneratedQuote();
     const clientName = document.getElementById('quoteClientName').value.trim();
     const subject = encodeURIComponent(`Cotización — ${clientName || 'tu proyecto'}`);
     const body = encodeURIComponent(`${greeting(clientName)},\n\nAdjunto la cotización de tu proyecto de piscina/spa (el archivo PDF se acaba de descargar en tu computador — adjúntalo a este correo).\n\nCualquier duda, quedo atento.\n\nSaludos.`);
@@ -1471,6 +1648,7 @@ document.getElementById('btnQuoteDocWhatsapp').addEventListener('click', functio
   if (!rawPhone) { alert('Escribe primero el teléfono del cliente.'); return; }
   withBusyButton(this, 'Generando…', () => generateQuotePdf().then(pdf => {
     pdf.save(quotePdfFileName());
+    saveGeneratedQuote();
     const digits = rawPhone.replace(/\D/g, '');
     const withCountry = digits.length === 10 ? '57' + digits : digits;
     const clientName = document.getElementById('quoteClientName').value.trim();
