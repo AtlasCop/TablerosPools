@@ -88,6 +88,10 @@
       </svg>
     </button>
 
+    <button id="btnQuoteToggle" title="Mostrar/ocultar cotización" class="p-2 rounded hover:bg-slate-800 bg-sky-600/70">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="21" r="1.4" fill="currentColor" stroke="none"/><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 8H6.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
     <div class="relative">
       <button id="btnArrowMenu" title="Insertar flecha" class="p-2 rounded hover:bg-slate-800 flex items-center gap-1">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h14M13 7l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -230,6 +234,22 @@
         Para empezar, arrastra equipos desde el panel de inventario hacia aquí.
       </div>
     </main>
+
+    <!-- QUOTE / SHOPPING-CART PANEL -->
+    <aside id="quotePanel" class="w-72 shrink-0 bg-white border-l border-slate-200 flex flex-col overflow-hidden">
+      <div class="px-3 py-2.5 border-b border-slate-200">
+        <h2 class="text-xs font-bold tracking-wide text-slate-500 uppercase">Cotización</h2>
+        <p class="text-[10px] text-slate-400 mt-0.5">Se arma sola con los objetos reales que agregues al tablero.</p>
+      </div>
+      <div id="quoteBody" class="hidden flex-1 overflow-y-auto p-2.5 space-y-3"></div>
+      <div id="quoteEmptyState" class="flex-1 flex items-center justify-center text-center text-[11px] text-slate-400 px-6">
+        Arrastra objetos con precio al tablero para ver aquí la cotización.
+      </div>
+      <div class="border-t border-slate-200 px-3 py-2.5 bg-slate-50 flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-600 uppercase">Total general</span>
+        <span id="quoteGrandTotal" class="text-sm font-bold text-slate-800">$0</span>
+      </div>
+    </aside>
   </div>
 </div>
 
@@ -303,6 +323,11 @@
           <input id="itemPrice" type="number" min="0" step="1" class="w-full text-sm border border-slate-200 rounded pl-6 pr-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="0" />
         </div>
       </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Categoría en la cotización</label>
+        <select id="itemQuoteCategory" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white"></select>
+        <p class="text-[10px] text-slate-400 mt-1">En qué sección de la cotización aparece este objeto al arrastrarlo al tablero. Se sugiere una por defecto, pero puedes cambiarla.</p>
+      </div>
       <p id="itemFormError" class="hidden text-xs text-red-500"></p>
       <div class="flex gap-2 pt-1">
         <button type="button" id="itemModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
@@ -314,87 +339,127 @@
 
 <script>
 /* ---------------------------------------------------------
+   CATEGORÍAS DE LA COTIZACIÓN (panel derecho, tipo "canasta")
+   — lista dada por el usuario (26) + "Otros" como cajón de sastre
+   para lo que no encaja en ninguna de las 26 explícitas.
+--------------------------------------------------------- */
+const QUOTE_CATEGORIES = [
+  { id: 'sist-filtracion', label: 'Sistema avanzado de filtración y recirculación de alto ahorro energético' },
+  { id: 'desinfeccion-cloro', label: 'Desinfección con cloro' },
+  { id: 'complementos-desinfeccion', label: 'Complementos para desinfección (opcional)' },
+  { id: 'iluminacion-q', label: 'Iluminación' },
+  { id: 'complementos-iluminacion-q', label: 'Complementos para iluminación (opcional)' },
+  { id: 'hidroterapia', label: 'Hidroterapia con sensaciones diferentes' },
+  { id: 'calefaccion-gas-q', label: 'Calefacción a gas' },
+  { id: 'automatizacion-q', label: 'Automatización' },
+  { id: 'boquillas-aire-plantar', label: 'Boquillas de aire plantar (opcional)' },
+  { id: 'volcan-burbujas', label: 'Volcán de burbujas (opcional)' },
+  { id: 'cama-aire', label: 'Cama de aire (opcional)' },
+  { id: 'cascada-bali', label: 'Cascada Bali (opcional)' },
+  { id: 'cascada-mini-bali', label: 'Cascada mini Bali (opcional)' },
+  { id: 'canon-tahiti', label: 'Cañón Tahiti (opcional)' },
+  { id: 'canon-fidji', label: 'Cañón Fidji (opcional)' },
+  { id: 'chorros-laminares', label: 'Chorros laminares o deck jets (opcional)' },
+  { id: 'cascadas-pared', label: 'Cascadas de pared (opcional)' },
+  { id: 'fitness-acuatico', label: 'Fitness acuático (opcional)' },
+  { id: 'sistemas-control', label: 'Sistemas de control (opcional)' },
+  { id: 'sistemas-aspiracion', label: 'Sistemas de aspiración electrónicos (opcional)' },
+  { id: 'seguridad-piscina-q', label: 'Elementos de seguridad en piscinas (opcional)' },
+  { id: 'kit-limpieza', label: 'Kit de limpieza para piscina' },
+  { id: 'kit-balance-quimico', label: 'Kit para balance químico del agua' },
+  { id: 'sistemas-conduccion-agua', label: 'Sistemas de conducción de agua' },
+  { id: 'asesoria-planimetria', label: 'Asesoría y/o planimetría, accesorios para conformar CM (en nivel cero) y transporte' },
+  { id: 'mano-obra-instalacion', label: 'Mano de obra de la instalación de los equipos y accesorios en el cuarto de máquinas' },
+  { id: 'otros-q', label: 'Otros' },
+];
+const QUOTE_CATEGORY_BY_ID = {};
+QUOTE_CATEGORIES.forEach(qc => { QUOTE_CATEGORY_BY_ID[qc.id] = qc; });
+
+/* ---------------------------------------------------------
    CATÁLOGO DE EQUIPOS (placeholders, iconos dibujados a mano)
+   — cada categoría lleva un quoteCategory: a cuál de las 26+1
+   categorías de la cotización pertenecen sus objetos por defecto
+   (el usuario puede cambiarlo por objeto al agregarlo/editarlo).
 --------------------------------------------------------- */
 const CATALOG = [
-  { id: 'motobombas', label: 'Motobombas', color: '#2563eb', code: 'MB', items: [
+  { id: 'motobombas', label: 'Motobombas', color: '#2563eb', code: 'MB', quoteCategory: 'sist-filtracion', items: [
       { id: 'bomba-centrifuga', name: 'Bomba centrífuga', shape: 'pump' },
   ]},
-  { id: 'filtracion', label: 'Filtración', color: '#0891b2', code: 'FIL', items: [
+  { id: 'filtracion', label: 'Filtración', color: '#0891b2', code: 'FIL', quoteCategory: 'sist-filtracion', items: [
       { id: 'filtro-arena', name: 'Filtro de arena', shape: 'filter' },
       { id: 'filtro-cartucho', name: 'Filtro de cartucho', shape: 'filter' },
       { id: 'valvula-selectora', name: 'Válvula selectora', shape: 'valve' },
   ]},
-  { id: 'iluminacion', label: 'Iluminación', color: '#d97706', code: 'ILU', items: [
+  { id: 'iluminacion', label: 'Iluminación', color: '#d97706', code: 'ILU', quoteCategory: 'iluminacion-q', items: [
       { id: 'led-sumergible', name: 'Luz LED sumergible', shape: 'light' },
       { id: 'reflector-spa', name: 'Reflector de spa', shape: 'light' },
   ]},
-  { id: 'complementos-iluminacion', label: 'Complementos Iluminación', color: '#f59e0b', code: 'CIL', items: [
+  { id: 'complementos-iluminacion', label: 'Complementos Iluminación', color: '#f59e0b', code: 'CIL', quoteCategory: 'complementos-iluminacion-q', items: [
       { id: 'fibra-optica', name: 'Fibra óptica', shape: 'fiber' },
   ]},
-  { id: 'sistemas-desinfeccion', label: 'Sistemas de desinfección', color: '#0d9488', code: 'SDI', items: [
+  { id: 'sistemas-desinfeccion', label: 'Sistemas de desinfección', color: '#0d9488', code: 'SDI', quoteCategory: 'desinfeccion-cloro', items: [
       { id: 'clorador-salino', name: 'Clorador salino', shape: 'chlorinator' },
       { id: 'dosificador', name: 'Dosificador automático', shape: 'doser' },
   ]},
-  { id: 'calefaccion-gas', label: 'Calefacción a gas', color: '#dc2626', code: 'CGA', items: [
+  { id: 'calefaccion-gas', label: 'Calefacción a gas', color: '#dc2626', code: 'CGA', quoteCategory: 'calefaccion-gas-q', items: [
       { id: 'calentador-gas', name: 'Calentador a gas', shape: 'heater' },
   ]},
-  { id: 'calefaccion-energia', label: 'Calefacción Energía', color: '#ea580c', code: 'CEN', items: [
+  { id: 'calefaccion-energia', label: 'Calefacción Energía', color: '#ea580c', code: 'CEN', quoteCategory: 'calefaccion-gas-q', items: [
       { id: 'bomba-calor', name: 'Bomba de calor', shape: 'heatpump' },
       { id: 'calentador-electrico', name: 'Calentador eléctrico', shape: 'heater' },
       { id: 'calentador-solar', name: 'Calentador solar', shape: 'solar' },
       { id: 'intercambiador', name: 'Intercambiador de calor', shape: 'heater' },
   ]},
-  { id: 'automatizacion', label: 'Automatización', color: '#7c3aed', code: 'AUT', items: [
+  { id: 'automatizacion', label: 'Automatización', color: '#7c3aed', code: 'AUT', quoteCategory: 'automatizacion-q', items: [
       { id: 'variador', name: 'Variador de velocidad', shape: 'panel' },
       { id: 'tablero-control', name: 'Tablero de control', shape: 'panel' },
       { id: 'wifi-automatizacion', name: 'Automatización WiFi', shape: 'wifi' },
   ]},
-  { id: 'complementos-automatizacion', label: 'Complementos automatización', color: '#a78bfa', code: 'CAU', items: [
+  { id: 'complementos-automatizacion', label: 'Complementos automatización', color: '#a78bfa', code: 'CAU', quoteCategory: 'sistemas-control', items: [
       { id: 'sensor-temp', name: 'Sensor de temperatura', shape: 'sensor' },
   ]},
-  { id: 'wellness', label: 'Wellness', color: '#ec4899', code: 'WEL', items: [
+  { id: 'wellness', label: 'Wellness', color: '#ec4899', code: 'WEL', quoteCategory: 'hidroterapia', items: [
       { id: 'escalon-spa', name: 'Escalón de spa', shape: 'step' },
   ]},
-  { id: 'accesorios-electricos-hidraulicos', label: 'Accesorios Eléctricos e Hidráulicos', color: '#64748b', code: 'AEH', items: [
+  { id: 'accesorios-electricos-hidraulicos', label: 'Accesorios Eléctricos e Hidráulicos', color: '#64748b', code: 'AEH', quoteCategory: 'sistemas-conduccion-agua', items: [
       { id: 'valvula-bola', name: 'Válvula de bola', shape: 'valve' },
       { id: 'caja-conexion', name: 'Caja de conexión eléctrica', shape: 'panel' },
   ]},
-  { id: 'saber-hacer', label: 'Saber hacer', color: '#eab308', code: 'SAB', items: [
+  { id: 'saber-hacer', label: 'Saber hacer', color: '#eab308', code: 'SAB', quoteCategory: 'asesoria-planimetria', items: [
       { id: 'asesoria-tecnica', name: 'Asesoría técnica', shape: 'idea' },
   ]},
-  { id: 'mano-obra', label: 'Mano de obra', color: '#78716c', code: 'MDO', items: [
+  { id: 'mano-obra', label: 'Mano de obra', color: '#78716c', code: 'MDO', quoteCategory: 'mano-obra-instalacion', items: [
       { id: 'instalacion-mano-obra', name: 'Instalación y mano de obra', shape: 'wrench' },
   ]},
-  { id: 'robots-aseo', label: 'Robots de Aseo', color: '#059669', code: 'RAS', items: [
+  { id: 'robots-aseo', label: 'Robots de Aseo', color: '#059669', code: 'RAS', quoteCategory: 'sistemas-aspiracion', items: [
       { id: 'robot-limpiafondos', name: 'Robot limpiafondos', shape: 'robot' },
   ]},
-  { id: 'elementos-aseo-quimicos', label: 'Elementos de Aseo y Químicos', color: '#10b981', code: 'EAQ', items: [
+  { id: 'elementos-aseo-quimicos', label: 'Elementos de Aseo y Químicos', color: '#10b981', code: 'EAQ', quoteCategory: 'kit-limpieza', items: [
       { id: 'aspiradora-manual', name: 'Aspiradora manual', shape: 'vacuum' },
       { id: 'kit-prueba', name: 'Kit de prueba', shape: 'testkit' },
   ]},
-  { id: 'material-vaso-piscina', label: 'Material Vaso Piscina', color: '#475569', code: 'MVP', items: [
+  { id: 'material-vaso-piscina', label: 'Material Vaso Piscina', color: '#475569', code: 'MVP', quoteCategory: 'otros-q', items: [
       { id: 'escalera', name: 'Escalera de piscina', shape: 'ladder' },
       { id: 'cubierta-termica', name: 'Cubierta térmica', shape: 'cover' },
       { id: 'skimmer', name: 'Skimmer', shape: 'skimmer' },
   ]},
-  { id: 'hidrojets', label: 'Hidrojets', color: '#9333ea', code: 'HJ', items: [
+  { id: 'hidrojets', label: 'Hidrojets', color: '#9333ea', code: 'HJ', quoteCategory: 'hidroterapia', items: [
       { id: 'jet-direccional', name: 'Jet direccional', shape: 'jet' },
       { id: 'jet-turbo', name: 'Jet turbo de spa', shape: 'jet' },
   ]},
-  { id: 'seguridad-piscina', label: 'Seguridad Piscina', color: '#e11d48', code: 'SEG', items: [
+  { id: 'seguridad-piscina', label: 'Seguridad Piscina', color: '#e11d48', code: 'SEG', quoteCategory: 'seguridad-piscina-q', items: [
       { id: 'alarma-piscina', name: 'Alarma de piscina', shape: 'bell' },
   ]},
-  { id: 'sopladores', label: 'Sopladores', color: '#0ea5e9', code: 'SOP', items: [
+  { id: 'sopladores', label: 'Sopladores', color: '#0ea5e9', code: 'SOP', quoteCategory: 'hidroterapia', items: [
       { id: 'soplador-aire', name: 'Soplador de aire', shape: 'blower' },
   ]},
-  { id: 'nado-contracorriente', label: 'Nado Contracorriente', color: '#6366f1', code: 'NC', items: [
+  { id: 'nado-contracorriente', label: 'Nado Contracorriente', color: '#6366f1', code: 'NC', quoteCategory: 'hidroterapia', items: [
       { id: 'nado-contracorriente-item', name: 'Sistema de nado contracorriente', shape: 'jet' },
   ]},
-  { id: 'maderas-saunas', label: 'Maderas Saunas', color: '#92400e', code: 'MSA', items: [
+  { id: 'maderas-saunas', label: 'Maderas Saunas', color: '#92400e', code: 'MSA', quoteCategory: 'otros-q', items: [
       { id: 'sauna-madera', name: 'Sauna de madera', shape: 'cabin' },
   ]},
-  { id: 'otros', label: 'Otros', color: '#6b7280', code: 'OTR', items: [
+  { id: 'otros', label: 'Otros', color: '#6b7280', code: 'OTR', quoteCategory: 'otros-q', items: [
       { id: 'sombrilla', name: 'Sombrilla', shape: 'umbrella' },
   ]},
 ];
@@ -470,10 +535,25 @@ function idbNextCode(categoryId, prefix) {
     getReq.onerror = () => reject(getReq.error);
   }));
 }
+function idbGetAllItems() {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('items', 'readonly');
+    const req = tx.objectStore('items').getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }));
+}
 
-/* In-memory cache of DB-backed custom items, keyed by id — populated as
-   categories are rendered, consulted by drag-drop and the edit button. */
+/* In-memory cache of every DB-backed custom item, keyed by id — loaded once
+   at startup (all categories, not just the active one) so drag-drop, the
+   edit/delete buttons, and the quote panel all have a complete, synchronous
+   view. Kept in sync directly (no re-fetch) whenever an item is saved or
+   deleted, from wherever that happens. */
 const CUSTOM_ITEMS_BY_ID = {};
+idbGetAllItems().then(items => {
+  items.forEach(it => { CUSTOM_ITEMS_BY_ID[it.id] = it; });
+  rebuildQuote();
+});
 
 /* ---------------------------------------------------------
    GENERADOR DE ICONOS (SVG string, 64x64) — para el panel
@@ -569,22 +649,41 @@ canvas.on('object:moving', (e) => {
    BUILD & DROP ICONS ONTO THE BOARD
 --------------------------------------------------------- */
 function buildImageIconGroup(itemDef, left, top, callback) {
+  const commonProps = {
+    left, top, originX: 'center', originY: 'center',
+    hasControls: true, hasBorders: true,
+    cornerStyle: 'circle', cornerColor: '#0ea5e9', cornerSize: 10, transparentCorners: false,
+    borderColor: '#0ea5e9',
+  };
+  if (!itemDef.imageDataUrl) {
+    // Real inventory item with no photo uploaded yet — a plain placeholder
+    // box instead of trying (and failing) to load an image that isn't there.
+    const rect = new fabric.Rect({ ...commonProps, width: 72, height: 72, rx: 12, ry: 12, fill: '#e2e8f0', stroke: '#cbd5e1', strokeWidth: 1 });
+    rect.set({ itemId: itemDef.id, itemName: itemDef.name, isPhotoItem: true });
+    callback(rect);
+    return;
+  }
   fabric.Image.fromURL(itemDef.imageDataUrl, (img) => {
     const MAX = 90;
     const scale = Math.min(MAX / img.width, MAX / img.height, 1);
-    img.set({
-      left, top, scaleX: scale, scaleY: scale, originX: 'center', originY: 'center',
-      hasControls: true, hasBorders: true,
-      cornerStyle: 'circle', cornerColor: '#0ea5e9', cornerSize: 10, transparentCorners: false,
-      borderColor: '#0ea5e9',
-    });
+    img.set({ ...commonProps, scaleX: scale, scaleY: scale });
     img.set({ itemId: itemDef.id, itemName: itemDef.name, isPhotoItem: true });
     callback(img);
   }, { crossOrigin: 'anonymous' });
 }
 
 function addItemToCanvas(itemDef, left, top) {
-  if (itemDef.imageDataUrl) {
+  // Placeholder demo items carry a hand-drawn `shape`; real inventory items
+  // (added via the modal) never do — reliable discriminator regardless of
+  // whether the real item happens to have a photo uploaded yet.
+  if (itemDef.shape) {
+    const group = buildIconGroup(itemDef, left, top);
+    canvas.add(group);
+    canvas.setActiveObject(group);
+    canvas.requestRenderAll();
+    pushHistory();
+    refreshEmptyHint();
+  } else {
     buildImageIconGroup(itemDef, left, top, (group) => {
       canvas.add(group);
       canvas.setActiveObject(group);
@@ -592,13 +691,6 @@ function addItemToCanvas(itemDef, left, top) {
       pushHistory();
       refreshEmptyHint();
     });
-  } else {
-    const group = buildIconGroup(itemDef, left, top);
-    canvas.add(group);
-    canvas.setActiveObject(group);
-    canvas.requestRenderAll();
-    pushHistory();
-    refreshEmptyHint();
   }
 }
 
@@ -842,10 +934,9 @@ function renderInventory() {
   idbGetItemsForCategory(cat.id).then(customItems => {
     if (cat.id !== activeCat) return; // user already switched categories
     currentCategoryCustomItems = customItems;
-    customItems.forEach(dbItem => { CUSTOM_ITEMS_BY_ID[dbItem.id] = {
-      id: dbItem.id, name: dbItem.name, categoryColor: cat.color,
-      imageDataUrl: dbItem.imageDataUrl, code: dbItem.code,
-    }; });
+    // CUSTOM_ITEMS_BY_ID already has every item (loaded once at startup) —
+    // just refresh these specific records in case they changed elsewhere.
+    customItems.forEach(dbItem => { CUSTOM_ITEMS_BY_ID[dbItem.id] = dbItem; });
     updatePriceRangeBounds(customItems);
     renderCustomItemCards();
   });
@@ -907,6 +998,7 @@ function renderCustomItemCards() {
       idbDeleteItem(dbItem.id).then(() => {
         delete CUSTOM_ITEMS_BY_ID[dbItem.id];
         renderInventory();
+        rebuildQuote();
       });
     });
     invGrid.appendChild(card);
@@ -925,6 +1017,105 @@ renderCatRail();
 renderInventory();
 
 document.getElementById('btnAddItem').addEventListener('click', () => openItemModal('add', activeCat, null));
+
+/* ---------------------------------------------------------
+   COTIZACIÓN — panel derecho, tipo "canasta de compras": se
+   reconstruye leyendo directamente los objetos del tablero cada
+   vez que algo cambia (pushHistory ya se llama en cada acción
+   relevante: agregar, eliminar, duplicar, deshacer/rehacer, cargar).
+   Solo cuenta objetos reales de inventario (con código/precio en la
+   base de datos) — los íconos de ejemplo no tienen esos datos y no
+   aportarían nada útil a un presupuesto.
+--------------------------------------------------------- */
+function formatCOP(n) { return '$' + Math.round(n || 0).toLocaleString('es-CO'); }
+
+function rebuildQuote() {
+  const quoteBody = document.getElementById('quoteBody');
+  const quoteEmptyState = document.getElementById('quoteEmptyState');
+  const quoteGrandTotal = document.getElementById('quoteGrandTotal');
+  quoteBody.innerHTML = '';
+
+  const counts = {};
+  canvas.getObjects().forEach(obj => {
+    if (!obj.itemId || !CUSTOM_ITEMS_BY_ID[obj.itemId]) return; // not a real inventory item
+    counts[obj.itemId] = (counts[obj.itemId] || 0) + 1;
+  });
+  const itemIds = Object.keys(counts);
+
+  if (!itemIds.length) {
+    quoteBody.classList.add('hidden');
+    quoteEmptyState.classList.remove('hidden');
+    quoteGrandTotal.textContent = formatCOP(0);
+    return;
+  }
+  quoteBody.classList.remove('hidden');
+  quoteEmptyState.classList.add('hidden');
+
+  const byCategory = {};
+  itemIds.forEach(id => {
+    const dbItem = CUSTOM_ITEMS_BY_ID[id];
+    const qcId = QUOTE_CATEGORY_BY_ID[dbItem.quoteCategory] ? dbItem.quoteCategory : 'otros-q';
+    (byCategory[qcId] = byCategory[qcId] || []).push({ dbItem, qty: counts[id] });
+  });
+
+  let grandTotal = 0;
+  QUOTE_CATEGORIES.forEach(qc => {
+    const rows = byCategory[qc.id];
+    if (!rows || !rows.length) return;
+
+    const block = document.createElement('div');
+    block.className = 'rounded-lg overflow-hidden border border-slate-200';
+    block.innerHTML = `<div class="bg-sky-400 text-white text-center font-bold text-[10px] py-1.5 px-2 uppercase leading-tight">${qc.label}</div>`;
+
+    const rowsWrap = document.createElement('div');
+    rowsWrap.className = 'divide-y divide-slate-100';
+    let subtotal = 0;
+    rows.forEach(({ dbItem, qty }) => {
+      const unit = dbItem.priceNoTax || 0;
+      const lineTotal = unit * qty;
+      subtotal += lineTotal;
+      const row = document.createElement('div');
+      row.className = 'flex items-start gap-1.5 px-2 py-1.5';
+      row.title = [dbItem.subline, dbItem.description].filter(Boolean).join(' — ');
+      const imgHtml = dbItem.imageDataUrl
+        ? `<img src="${dbItem.imageDataUrl}" class="w-7 h-7 rounded object-cover border border-slate-100 shrink-0" />`
+        : `<div class="w-7 h-7 rounded bg-slate-100 shrink-0"></div>`;
+      row.innerHTML = `
+        ${imgHtml}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-slate-400 text-[9px] font-mono">${dbItem.code}</span>
+            <span class="text-slate-400 text-[9px]">x${qty}</span>
+          </div>
+          <p class="text-slate-700 text-[10px] leading-tight truncate">${dbItem.name}</p>
+          <div class="flex items-center justify-between text-[10px]">
+            <span class="text-slate-400">${formatCOP(unit)}</span>
+            <span class="font-semibold text-slate-700">${formatCOP(lineTotal)}</span>
+          </div>
+        </div>
+      `;
+      rowsWrap.appendChild(row);
+    });
+    block.appendChild(rowsWrap);
+
+    const subtotalRow = document.createElement('div');
+    subtotalRow.className = 'bg-slate-50 text-[10px] font-bold text-slate-600 px-2 py-1.5 flex items-center justify-between';
+    subtotalRow.innerHTML = `<span>Subtotal</span><span>${formatCOP(subtotal)}</span>`;
+    block.appendChild(subtotalRow);
+
+    quoteBody.appendChild(block);
+    grandTotal += subtotal;
+  });
+
+  quoteGrandTotal.textContent = formatCOP(grandTotal);
+}
+
+const quotePanel = document.getElementById('quotePanel');
+document.getElementById('btnQuoteToggle').addEventListener('click', function() {
+  quotePanel.classList.toggle('hidden');
+  this.classList.toggle('bg-sky-600/70', !quotePanel.classList.contains('hidden'));
+  resizeCanvas();
+});
 
 /* ---------------------------------------------------------
    SELECTION TOOLBAR (rotate / duplicate / delete)
@@ -1099,6 +1290,7 @@ function pushHistory() {
   history.push(serializeState());
   historyIndex = history.length - 1;
   updateHistoryButtons();
+  rebuildQuote();
 }
 function updateHistoryButtons() {
   document.getElementById('btnUndo').disabled = historyIndex <= 0;
@@ -1116,6 +1308,7 @@ function loadState(json) {
     canvas.requestRenderAll();
     restoring = false;
     refreshEmptyHint();
+    rebuildQuote();
   });
 }
 document.getElementById('btnUndo').addEventListener('click', () => {
@@ -1386,7 +1579,15 @@ const itemNameInput = document.getElementById('itemName');
 const itemSublineInput = document.getElementById('itemSubline');
 const itemDescriptionInput = document.getElementById('itemDescription');
 const itemPriceInput = document.getElementById('itemPrice');
+const itemQuoteCategorySelect = document.getElementById('itemQuoteCategory');
 const itemFormError = document.getElementById('itemFormError');
+
+QUOTE_CATEGORIES.forEach(qc => {
+  const opt = document.createElement('option');
+  opt.value = qc.id;
+  opt.textContent = qc.label;
+  itemQuoteCategorySelect.appendChild(opt);
+});
 
 let itemModalMode = 'add';
 let itemModalCategoryId = null;
@@ -1406,6 +1607,7 @@ function openItemModal(mode, categoryId, existingItem) {
   document.getElementById('itemUseOriginalBtn').classList.add('hidden');
   itemForm.reset();
 
+  const cat = CATEGORY_BY_ID[categoryId];
   if (mode === 'edit' && existingItem) {
     itemModalTitle.textContent = 'Editar objeto';
     itemCodeDisplay.value = existingItem.code;
@@ -1413,9 +1615,11 @@ function openItemModal(mode, categoryId, existingItem) {
     itemSublineInput.value = existingItem.subline || '';
     itemDescriptionInput.value = existingItem.description || '';
     itemPriceInput.value = existingItem.priceNoTax != null ? existingItem.priceNoTax : '';
+    itemQuoteCategorySelect.value = existingItem.quoteCategory || cat.quoteCategory;
   } else {
     itemModalTitle.textContent = 'Agregar objeto';
     itemCodeDisplay.value = '';
+    itemQuoteCategorySelect.value = cat.quoteCategory;
   }
   updateItemImagePreview();
   itemModal.classList.remove('hidden');
@@ -1638,6 +1842,7 @@ itemForm.addEventListener('submit', (e) => {
   const subline = itemSublineInput.value.trim();
   const description = itemDescriptionInput.value.trim();
   const priceNoTax = itemPriceInput.value === '' ? null : Number(itemPriceInput.value);
+  const quoteCategory = itemQuoteCategorySelect.value;
   const cat = CATEGORY_BY_ID[itemModalCategoryId];
 
   const saveRecord = (code) => {
@@ -1649,10 +1854,13 @@ itemForm.addEventListener('submit', (e) => {
     record.description = description;
     record.priceNoTax = priceNoTax;
     record.imageDataUrl = itemModalImageDataUrl;
+    record.quoteCategory = quoteCategory;
 
     idbPutItem(record).then(() => {
+      CUSTOM_ITEMS_BY_ID[record.id] = record;
       closeItemModal();
       if (itemModalCategoryId === activeCat) renderInventory();
+      rebuildQuote();
     });
   };
 
