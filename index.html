@@ -64,6 +64,13 @@
       <option value="">Mis tableros…</option>
     </select>
     <button id="btnNew" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600">Nuevo</button>
+    <input id="fileImportInput" type="file" accept=".json,application/json" class="hidden" />
+    <button id="btnOpenFile" title="Abrir un tablero guardado como archivo .json" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 flex items-center gap-1.5">
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke-linejoin="round"/>
+      </svg>
+      Abrir archivo
+    </button>
     <button id="btnShare" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 flex items-center gap-1.5">
       <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
@@ -72,6 +79,12 @@
       Compartir
     </button>
     <button id="btnExport" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600">Exportar PNG</button>
+    <button id="btnSaveFile" title="Descargar este tablero como archivo .json para guardarlo en tu computador" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 flex items-center gap-1.5">
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Guardar archivo
+    </button>
     <button id="btnSave" class="text-xs px-3 py-1.5 rounded bg-sky-500 hover:bg-sky-400 font-medium">Guardar</button>
   </header>
 
@@ -684,6 +697,46 @@ function loadFromShareLinkIfPresent() {
   updateHistoryButtons();
 }
 loadFromShareLinkIfPresent();
+
+/* ---------------------------------------------------------
+   GUARDAR / ABRIR ARCHIVO — un .json real en el computador
+   del usuario, para retomar el tablero después (a diferencia
+   de "Guardar", que solo queda en este navegador).
+--------------------------------------------------------- */
+document.getElementById('btnSaveFile').addEventListener('click', () => {
+  const name = document.getElementById('boardName').value.trim() || 'Proyecto sin título';
+  const data = { app: 'tablero-piscinas', version: 1, name, canvas: canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented']) };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${name.replace(/\s+/g, '_')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+const fileImportInput = document.getElementById('fileImportInput');
+document.getElementById('btnOpenFile').addEventListener('click', () => fileImportInput.click());
+fileImportInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch { alert('No se pudo abrir el archivo: no es un .json válido.'); return; }
+    const canvasJson = data.canvas || data;
+    loadState(canvasJson);
+    document.getElementById('boardName').value = data.name || 'Proyecto sin título';
+    document.getElementById('loadSelect').value = '';
+    history = [JSON.stringify(canvasJson)];
+    historyIndex = 0;
+    updateHistoryButtons();
+  };
+  reader.onerror = () => alert('No se pudo leer el archivo.');
+  reader.readAsText(file);
+});
 </script>
 </body>
 </html>
