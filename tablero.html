@@ -193,7 +193,11 @@
           </div>
           <input id="itemImageInput" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.svg,image/*" class="text-xs flex-1" />
         </div>
-        <p class="text-[10px] text-slate-400 mt-1">Formatos: JPG, PNG, GIF, WEBP, SVG.</p>
+        <p class="text-[10px] text-slate-400 mt-1">Formatos: JPG, PNG, GIF, WEBP, SVG. Al subir una foto, el fondo se elimina y se recorta automáticamente.</p>
+        <p id="itemBgProcessingStatus" class="hidden text-[10px] text-slate-500 mt-1">Procesando imagen (quitando fondo)…</p>
+        <p id="itemBgRemovedStatus" class="hidden text-[10px] text-emerald-600 mt-1">✓ Fondo eliminado y recortada automáticamente.</p>
+        <p id="itemBgNotUniformStatus" class="hidden text-[10px] text-amber-600 mt-1">No se detectó un fondo uniforme para quitar — se dejó la imagen tal como se subió.</p>
+        <button type="button" id="itemUseOriginalBtn" class="hidden text-[10px] text-slate-400 underline hover:text-slate-600 mt-1">Usar la imagen original sin procesar</button>
         <button type="button" id="itemConvertPngBtn" class="hidden mt-2 text-xs px-2.5 py-1.5 rounded border border-sky-200 text-sky-600 hover:bg-sky-50 flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16h16M4 12l4-4 4 4 4-6 4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Convertir a PNG
@@ -1090,7 +1094,10 @@ function openItemModal(mode, categoryId, existingItem) {
   itemModalEditingItem = existingItem;
   itemModalImageDataUrl = existingItem ? (existingItem.imageDataUrl || null) : null;
   itemModalConvertedFlag = false;
+  itemModalRawImageDataUrl = null;
   itemFormError.classList.add('hidden');
+  hideBgStatusMessages();
+  document.getElementById('itemUseOriginalBtn').classList.add('hidden');
   itemForm.reset();
 
   if (mode === 'edit' && existingItem) {
@@ -1129,6 +1136,120 @@ function updateItemImagePreview() {
   }
 }
 
+/* ---------------------------------------------------------
+   QUITAR FONDO + RECORTAR (automático al subir una imagen)
+   Heurística sin dependencias ni servidor: promedia el color de
+   las esquinas como "fondo", inunda (flood fill) desde los bordes
+   marcando como transparente todo lo conectado a ese color, y
+   recorta al cuadro que encierra lo que quedó opaco. Funciona bien
+   con fotos de catálogo sobre fondo blanco/liso (lo típico en fichas
+   de producto); con fotos de fondo complejo simplemente no recorta
+   mucho y se avisa al usuario.
+--------------------------------------------------------- */
+function removeBackgroundAndCrop(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth, h = img.naturalHeight;
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+
+        const patch = Math.max(1, Math.floor(Math.min(w, h) * 0.02));
+        function avgPatch(cx, cy) {
+          let r = 0, g = 0, b = 0, n = 0;
+          for (let y = Math.max(0, cy - patch); y < Math.min(h, cy + patch); y++) {
+            for (let x = Math.max(0, cx - patch); x < Math.min(w, cx + patch); x++) {
+              const i = (y * w + x) * 4;
+              r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
+            }
+          }
+          return [r / n, g / n, b / n];
+        }
+        const corners = [avgPatch(1, 1), avgPatch(w - 2, 1), avgPatch(1, h - 2), avgPatch(w - 2, h - 2)];
+        const bg = [0, 1, 2].map(k => corners.reduce((s, c) => s + c[k], 0) / 4);
+
+        const THRESHOLD = 34;
+        const visited = new Uint8Array(w * h);
+        const queue = new Int32Array(w * h);
+        let qLen = 0;
+        function isBg(x, y) {
+          const i = (y * w + x) * 4;
+          const dr = data[i] - bg[0], dg = data[i + 1] - bg[1], db = data[i + 2] - bg[2];
+          return Math.sqrt(dr * dr + dg * dg + db * db) < THRESHOLD;
+        }
+        function tryPush(x, y) {
+          if (x < 0 || x >= w || y < 0 || y >= h) return;
+          const i = y * w + x;
+          if (visited[i]) return;
+          if (!isBg(x, y)) return;
+          visited[i] = 1;
+          queue[qLen++] = i;
+        }
+        for (let x = 0; x < w; x++) { tryPush(x, 0); tryPush(x, h - 1); }
+        for (let y = 0; y < h; y++) { tryPush(0, y); tryPush(w - 1, y); }
+        let qi = 0;
+        while (qi < qLen) {
+          const i = queue[qi++];
+          const x = i % w, y = (i / w) | 0;
+          tryPush(x + 1, y); tryPush(x - 1, y); tryPush(x, y + 1); tryPush(x, y - 1);
+        }
+
+        let minX = w, minY = h, maxX = -1, maxY = -1, removedCount = 0;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            if (visited[i]) {
+              data[(i * 4) + 3] = 0;
+              removedCount++;
+            } else {
+              if (x < minX) minX = x; if (x > maxX) maxX = x;
+              if (y < minY) minY = y; if (y > maxY) maxY = y;
+            }
+          }
+        }
+        const removedRatio = removedCount / (w * h);
+        if (maxX < minX || maxY < minY || removedRatio < 0.02) {
+          // Nothing (or almost nothing) recognized as background — leave as-is.
+          resolve({ dataUrl, changed: false });
+          return;
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        const pad = 6;
+        const cropX = Math.max(0, minX - pad);
+        const cropY = Math.max(0, minY - pad);
+        const cropW = Math.min(w, maxX + pad) - cropX;
+        const cropH = Math.min(h, maxY + pad) - cropY;
+        const out = document.createElement('canvas');
+        out.width = cropW; out.height = cropH;
+        out.getContext('2d').drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+        resolve({ dataUrl: out.toDataURL('image/png'), changed: true });
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => reject(new Error('No se pudo cargar la imagen'));
+    img.src = dataUrl;
+  });
+}
+
+const itemBgProcessingStatus = document.getElementById('itemBgProcessingStatus');
+const itemBgRemovedStatus = document.getElementById('itemBgRemovedStatus');
+const itemBgNotUniformStatus = document.getElementById('itemBgNotUniformStatus');
+const itemUseOriginalBtn = document.getElementById('itemUseOriginalBtn');
+let itemModalRawImageDataUrl = null;
+
+function hideBgStatusMessages() {
+  itemBgProcessingStatus.classList.add('hidden');
+  itemBgRemovedStatus.classList.add('hidden');
+  itemBgNotUniformStatus.classList.add('hidden');
+}
+
 itemImageInput.addEventListener('change', () => {
   const file = itemImageInput.files[0];
   if (!file) return;
@@ -1140,11 +1261,37 @@ itemImageInput.addEventListener('change', () => {
   }
   const reader = new FileReader();
   reader.onload = () => {
-    itemModalImageDataUrl = reader.result;
+    itemModalRawImageDataUrl = reader.result;
     itemModalConvertedFlag = false;
-    updateItemImagePreview();
+    hideBgStatusMessages();
+    itemUseOriginalBtn.classList.add('hidden');
+    itemBgProcessingStatus.classList.remove('hidden');
+    removeBackgroundAndCrop(reader.result).then(({ dataUrl, changed }) => {
+      itemModalImageDataUrl = dataUrl;
+      hideBgStatusMessages();
+      if (changed) {
+        itemBgRemovedStatus.classList.remove('hidden');
+        itemUseOriginalBtn.classList.remove('hidden');
+      } else {
+        itemBgNotUniformStatus.classList.remove('hidden');
+      }
+      updateItemImagePreview();
+    }).catch(() => {
+      itemModalImageDataUrl = reader.result;
+      hideBgStatusMessages();
+      updateItemImagePreview();
+    });
   };
   reader.readAsDataURL(file);
+});
+
+itemUseOriginalBtn.addEventListener('click', () => {
+  if (!itemModalRawImageDataUrl) return;
+  itemModalImageDataUrl = itemModalRawImageDataUrl;
+  itemModalConvertedFlag = false;
+  hideBgStatusMessages();
+  itemUseOriginalBtn.classList.add('hidden');
+  updateItemImagePreview();
 });
 
 itemConvertPngBtn.addEventListener('click', () => {
