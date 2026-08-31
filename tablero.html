@@ -997,6 +997,24 @@ document.getElementById('btnRedo').addEventListener('click', () => {
 canvas.on('object:modified', pushHistory);
 pushHistory(); // initial empty state
 
+/* Ctrl+Z / Cmd+Z to undo, Ctrl+Shift+Z or Ctrl+Y to redo — skipped while
+   typing in a field (board name, item form) so it doesn't hijack normal
+   text-undo there. .click() on a disabled button is a no-op, so this
+   naturally respects "nothing left to undo/redo" without extra checks. */
+document.addEventListener('keydown', (e) => {
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const key = e.key.toLowerCase();
+  if (key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('btnUndo').click();
+  } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+    e.preventDefault();
+    document.getElementById('btnRedo').click();
+  }
+});
+
 /* ---------------------------------------------------------
    SAVE / LOAD (localStorage) + NEW + EXPORT
 --------------------------------------------------------- */
