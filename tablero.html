@@ -131,8 +131,11 @@
     </aside>
 
     <!-- BOARD -->
-    <main id="boardWrap" class="flex-1 relative bg-slate-200 overflow-hidden">
+    <main id="boardWrap" class="flex-1 relative bg-white overflow-hidden">
       <canvas id="board"></canvas>
+
+      <!-- hover tooltip for photo items (name only shows on hover) -->
+      <div id="canvasHoverTooltip" class="hidden absolute z-30 bg-slate-900 text-white text-[11px] px-2 py-1 rounded shadow-lg pointer-events-none whitespace-nowrap"></div>
 
       <!-- floating selection toolbar -->
       <div id="selToolbar" class="hidden absolute z-20 bg-slate-900 text-white rounded-lg shadow-lg flex items-center gap-1 p-1">
@@ -443,7 +446,7 @@ function iconSVG(shape, color) {
 --------------------------------------------------------- */
 const boardWrap = document.getElementById('boardWrap');
 const canvasEl = document.getElementById('board');
-const canvas = new fabric.Canvas('board', { backgroundColor: '#e2e8f0', selection: true, preserveObjectStacking: true });
+const canvas = new fabric.Canvas('board', { backgroundColor: '#ffffff', selection: true, preserveObjectStacking: true });
 
 let gridOn = true;
 let locked = false;
@@ -494,25 +497,16 @@ canvas.on('object:moving', (e) => {
 --------------------------------------------------------- */
 function buildImageIconGroup(itemDef, left, top, callback) {
   fabric.Image.fromURL(itemDef.imageDataUrl, (img) => {
-    const MAX = 80;
+    const MAX = 90;
     const scale = Math.min(MAX / img.width, MAX / img.height, 1);
-    img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, originX: 'left', originY: 'top', selectable: false });
-    const w = img.width * scale;
-    const h = img.height * scale;
-    const backing = new fabric.Rect({ left: -4, top: -4, width: w + 8, height: h + 8, rx: 10, ry: 10, fill: '#fff', stroke: 'rgba(0,0,0,0.12)', strokeWidth: 1, selectable: false });
-    const label = new fabric.Text(itemDef.name, {
-      fontSize: 12, fontFamily: 'Arial, sans-serif', fill: '#1e293b', top: h + 10, left: -4,
-      width: w + 8, textAlign: 'center', originX: 'left', selectable: false,
-    });
-    label.set({ left: (w - label.width) / 2 });
-    const group = new fabric.Group([backing, img, label], {
-      left, top, originX: 'center', originY: 'center',
+    img.set({
+      left, top, scaleX: scale, scaleY: scale, originX: 'center', originY: 'center',
       hasControls: true, hasBorders: true,
       cornerStyle: 'circle', cornerColor: '#0ea5e9', cornerSize: 10, transparentCorners: false,
       borderColor: '#0ea5e9',
     });
-    group.set({ itemId: itemDef.id, itemName: itemDef.name });
-    callback(group);
+    img.set({ itemId: itemDef.id, itemName: itemDef.name, isPhotoItem: true });
+    callback(img);
   }, { crossOrigin: 'anonymous' });
 }
 
@@ -720,6 +714,22 @@ canvas.on('object:scaling', positionSelToolbar);
 canvas.on('object:rotating', positionSelToolbar);
 canvas.on('selection:cleared', () => selToolbar.classList.add('hidden'));
 
+/* Photo items (real uploaded/cropped images) have no visible label — the
+   name only shows in a small tooltip while hovering the image. */
+const canvasHoverTooltip = document.getElementById('canvasHoverTooltip');
+canvas.on('mouse:over', (e) => {
+  if (!e.target || !e.target.isPhotoItem) return;
+  canvasHoverTooltip.textContent = e.target.itemName || '';
+  canvasHoverTooltip.classList.remove('hidden');
+  const br = e.target.getBoundingRect();
+  canvasHoverTooltip.style.left = (br.left + br.width / 2 - canvasHoverTooltip.offsetWidth / 2) + 'px';
+  canvasHoverTooltip.style.top = Math.max(4, br.top - canvasHoverTooltip.offsetHeight - 8) + 'px';
+});
+canvas.on('mouse:out', (e) => {
+  if (e.target && e.target.isPhotoItem) canvasHoverTooltip.classList.add('hidden');
+});
+canvas.on('mouse:down', () => canvasHoverTooltip.classList.add('hidden'));
+
 document.getElementById('btnRotateL').addEventListener('click', () => rotateActive(-15));
 document.getElementById('btnRotateR').addEventListener('click', () => rotateActive(15));
 function rotateActive(delta) {
@@ -735,7 +745,7 @@ document.getElementById('btnDuplicate').addEventListener('click', () => {
   const obj = canvas.getActiveObject();
   if (!obj) return;
   obj.clone((clone) => {
-    clone.set({ left: obj.left + GRID_SIZE, top: obj.top + GRID_SIZE });
+    clone.set({ left: obj.left + GRID_SIZE, top: obj.top + GRID_SIZE, itemId: obj.itemId, itemName: obj.itemName, isPhotoItem: obj.isPhotoItem });
     canvas.add(clone);
     canvas.setActiveObject(clone);
     canvas.requestRenderAll();
@@ -807,7 +817,7 @@ let historyIndex = -1;
 let restoring = false;
 
 function serializeState() {
-  return JSON.stringify(canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented']));
+  return JSON.stringify(canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented', 'isPhotoItem']));
 }
 function pushHistory() {
   if (restoring) return;
@@ -1033,7 +1043,7 @@ document.getElementById('btnLogout').addEventListener('click', () => {
 --------------------------------------------------------- */
 document.getElementById('btnSaveFile').addEventListener('click', () => {
   const name = document.getElementById('boardName').value.trim() || 'Proyecto sin título';
-  const data = { app: 'tablero-piscinas', version: 1, name, canvas: canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented']) };
+  const data = { app: 'tablero-piscinas', version: 1, name, canvas: canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented', 'isPhotoItem']) };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
