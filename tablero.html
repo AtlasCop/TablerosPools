@@ -23,6 +23,29 @@
   .item-card:active { cursor: grabbing; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+  /* Dual-handle price range slider: two overlapping <input type="range">,
+     each with a transparent track and only the thumb clickable, so both
+     handles can be grabbed independently on the same visual track. */
+  .price-range-input {
+    position: absolute; left: 0; top: 50%; width: 100%; margin: 0;
+    -webkit-appearance: none; appearance: none;
+    background: transparent; pointer-events: none;
+    transform: translateY(-50%);
+  }
+  .price-range-input::-webkit-slider-runnable-track { background: transparent; }
+  .price-range-input::-moz-range-track { background: transparent; }
+  .price-range-input::-webkit-slider-thumb {
+    -webkit-appearance: none; pointer-events: auto;
+    width: 14px; height: 14px; border-radius: 9999px;
+    background: #0ea5e9; border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.35); cursor: pointer;
+  }
+  .price-range-input::-moz-range-thumb {
+    pointer-events: auto; width: 14px; height: 14px; border-radius: 9999px;
+    background: #0ea5e9; border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.35); cursor: pointer;
+  }
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -160,12 +183,19 @@
           <svg class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
           <input id="invSearchInput" type="text" placeholder="Código, sublínea o descripción…" class="w-full text-xs border border-slate-200 rounded pl-7 pr-2 py-1.5 outline-none focus:ring-1 focus:ring-sky-400" />
         </div>
-        <div class="flex items-center gap-1.5">
-          <span class="text-[9px] text-slate-400 shrink-0 leading-tight">$ sin IVA</span>
-          <input id="invPriceMin" type="number" min="0" placeholder="Mín" class="w-full min-w-0 text-xs border border-slate-200 rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-sky-400" />
-          <span class="text-slate-300 text-xs shrink-0">–</span>
-          <input id="invPriceMax" type="number" min="0" placeholder="Máx" class="w-full min-w-0 text-xs border border-slate-200 rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-sky-400" />
+        <div id="invPriceRangeWrap">
+          <div class="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+            <span>Precio sin IVA</span>
+            <span><span id="invPriceMinLabel">$0</span> – <span id="invPriceMaxLabel">$0</span></span>
+          </div>
+          <div class="relative h-4">
+            <div class="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-slate-200 rounded-full"></div>
+            <div id="invPriceRangeTrack" class="absolute top-1/2 -translate-y-1/2 h-1 bg-sky-400 rounded-full"></div>
+            <input id="invPriceRangeMin" type="range" class="price-range-input" min="0" max="0" value="0" />
+            <input id="invPriceRangeMax" type="range" class="price-range-input" min="0" max="0" value="0" />
+          </div>
         </div>
+        <p id="invPriceRangeEmpty" class="hidden text-[10px] text-slate-400">Aún no hay precios registrados en esta categoría.</p>
       </div>
       <div id="invGrid" class="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-2.5 content-start"></div>
       <div class="px-3 py-2.5 border-t border-slate-200 text-[11px] text-slate-400 leading-snug">
@@ -740,17 +770,65 @@ function renderCatRail() {
 }
 
 const invSearchInput = document.getElementById('invSearchInput');
-const invPriceMin = document.getElementById('invPriceMin');
-const invPriceMax = document.getElementById('invPriceMax');
+const invPriceRangeMin = document.getElementById('invPriceRangeMin');
+const invPriceRangeMax = document.getElementById('invPriceRangeMax');
+const invPriceRangeTrack = document.getElementById('invPriceRangeTrack');
+const invPriceRangeWrap = document.getElementById('invPriceRangeWrap');
+const invPriceRangeEmpty = document.getElementById('invPriceRangeEmpty');
+const invPriceMinLabel = document.getElementById('invPriceMinLabel');
+const invPriceMaxLabel = document.getElementById('invPriceMaxLabel');
 let currentCategoryCustomItems = [];
+
+/* Slider bounds come from the actual prices in the active category —
+   recomputed every time it's opened, so "full range" always means "no
+   filtering" regardless of what that category's prices look like. */
+function updatePriceRangeBounds(items) {
+  const prices = items.map(i => i.priceNoTax).filter(p => p != null && !isNaN(p));
+  if (!prices.length) {
+    invPriceRangeWrap.classList.add('hidden');
+    invPriceRangeEmpty.classList.remove('hidden');
+    return;
+  }
+  invPriceRangeWrap.classList.remove('hidden');
+  invPriceRangeEmpty.classList.add('hidden');
+  let min = Math.min(...prices);
+  let max = Math.max(...prices);
+  if (min === max) max = min + 1; // avoid a degenerate zero-width range input
+  const step = Math.max(1, Math.round((max - min) / 100));
+  [invPriceRangeMin, invPriceRangeMax].forEach(el => { el.min = min; el.max = max; el.step = step; });
+  invPriceRangeMin.value = min;
+  invPriceRangeMax.value = max;
+  updatePriceRangeUI();
+}
+
+function updatePriceRangeUI() {
+  const min = Number(invPriceRangeMin.min);
+  const max = Number(invPriceRangeMin.max);
+  const vMin = Number(invPriceRangeMin.value);
+  const vMax = Number(invPriceRangeMax.value);
+  const pctMin = max > min ? ((vMin - min) / (max - min)) * 100 : 0;
+  const pctMax = max > min ? ((vMax - min) / (max - min)) * 100 : 100;
+  invPriceRangeTrack.style.left = pctMin + '%';
+  invPriceRangeTrack.style.width = Math.max(0, pctMax - pctMin) + '%';
+  invPriceMinLabel.textContent = '$' + vMin.toLocaleString('es-CO');
+  invPriceMaxLabel.textContent = '$' + vMax.toLocaleString('es-CO');
+}
+invPriceRangeMin.addEventListener('input', () => {
+  if (Number(invPriceRangeMin.value) > Number(invPriceRangeMax.value)) invPriceRangeMin.value = invPriceRangeMax.value;
+  updatePriceRangeUI();
+  renderCustomItemCards();
+});
+invPriceRangeMax.addEventListener('input', () => {
+  if (Number(invPriceRangeMax.value) < Number(invPriceRangeMin.value)) invPriceRangeMax.value = invPriceRangeMin.value;
+  updatePriceRangeUI();
+  renderCustomItemCards();
+});
 
 function renderInventory() {
   const cat = CATALOG.find(c => c.id === activeCat);
   invTitle.textContent = cat.label;
   invGrid.innerHTML = '';
   invSearchInput.value = '';
-  invPriceMin.value = '';
-  invPriceMax.value = '';
 
   cat.items.forEach(item => {
     const card = document.createElement('div');
@@ -768,6 +846,7 @@ function renderInventory() {
       id: dbItem.id, name: dbItem.name, categoryColor: cat.color,
       imageDataUrl: dbItem.imageDataUrl, code: dbItem.code,
     }; });
+    updatePriceRangeBounds(customItems);
     renderCustomItemCards();
   });
 }
@@ -780,16 +859,21 @@ function renderCustomItemCards() {
   document.querySelectorAll('.js-custom-item-card').forEach(el => el.remove());
 
   const query = invSearchInput.value.trim().toLowerCase();
-  const min = invPriceMin.value === '' ? null : Number(invPriceMin.value);
-  const max = invPriceMax.value === '' ? null : Number(invPriceMax.value);
+  const rangeMin = Number(invPriceRangeMin.value);
+  const rangeMax = Number(invPriceRangeMax.value);
+  // Only "active" once the handles have actually moved off the full bounds —
+  // otherwise items with no price at all would get excluded by default.
+  const priceFilterActive = rangeMin > Number(invPriceRangeMin.min) || rangeMax < Number(invPriceRangeMax.max);
 
   const filtered = currentCategoryCustomItems.filter(dbItem => {
     if (query) {
       const haystack = [dbItem.code, dbItem.subline, dbItem.description].filter(Boolean).join(' ').toLowerCase();
       if (!haystack.includes(query)) return false;
     }
-    if (min != null && !(dbItem.priceNoTax != null && dbItem.priceNoTax >= min)) return false;
-    if (max != null && !(dbItem.priceNoTax != null && dbItem.priceNoTax <= max)) return false;
+    if (priceFilterActive) {
+      if (dbItem.priceNoTax == null) return false;
+      if (dbItem.priceNoTax < rangeMin || dbItem.priceNoTax > rangeMax) return false;
+    }
     return true;
   });
 
@@ -835,7 +919,7 @@ function renderCustomItemCards() {
     invGrid.appendChild(p);
   }
 }
-[invSearchInput, invPriceMin, invPriceMax].forEach(el => el.addEventListener('input', renderCustomItemCards));
+invSearchInput.addEventListener('input', renderCustomItemCards);
 
 renderCatRail();
 renderInventory();
