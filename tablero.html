@@ -207,6 +207,11 @@
       </div>
     </aside>
 
+    <!-- LEFT PANEL COLLAPSE ARROW -->
+    <button id="leftPanelToggle" title="Ocultar/mostrar panel de equipos" class="shrink-0 w-4 bg-slate-100 hover:bg-sky-100 border-r border-slate-200 flex items-center justify-center">
+      <svg id="leftPanelToggleIcon" class="w-3 h-3 text-slate-400 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
     <!-- BOARD -->
     <main id="boardWrap" class="flex-1 relative bg-white overflow-hidden">
       <canvas id="board"></canvas>
@@ -234,6 +239,11 @@
         Para empezar, arrastra equipos desde el panel de inventario hacia aquí.
       </div>
     </main>
+
+    <!-- QUOTE PANEL COLLAPSE ARROW -->
+    <button id="quotePanelToggleArrow" title="Ocultar/mostrar cotización" class="shrink-0 w-4 bg-slate-100 hover:bg-sky-100 border-l border-slate-200 flex items-center justify-center">
+      <svg id="quotePanelToggleArrowIcon" class="w-3 h-3 text-slate-400 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
 
     <!-- QUOTE / SHOPPING-CART PANEL -->
     <aside id="quotePanel" class="w-72 shrink-0 bg-white border-l border-slate-200 flex flex-col overflow-hidden">
@@ -1109,12 +1119,50 @@ function rebuildQuote() {
   quoteGrandTotal.textContent = formatCOP(grandTotal);
 }
 
-const quotePanel = document.getElementById('quotePanel');
-document.getElementById('btnQuoteToggle').addEventListener('click', function() {
-  quotePanel.classList.toggle('hidden');
-  this.classList.toggle('bg-sky-600/70', !quotePanel.classList.contains('hidden'));
+/* ---------------------------------------------------------
+   FLECHAS PARA OCULTAR/MOSTRAR LOS PANELES LATERALES — cada una
+   colapsa el panel a 0 de ancho (no display:none, para que la
+   flechita en sí quede siempre visible y clickeable) y voltea su
+   propio ícono para indicar "traer de vuelta".
+--------------------------------------------------------- */
+function setPanelCollapsed(panelEls, iconEl, collapsed) {
+  panelEls.forEach(el => {
+    if (collapsed) {
+      el.style.width = '0px';
+      el.style.minWidth = '0px';
+      el.style.overflow = 'hidden';
+      el.style.borderWidth = '0px';
+    } else {
+      el.style.width = '';
+      el.style.minWidth = '';
+      el.style.overflow = '';
+      el.style.borderWidth = '';
+    }
+  });
+  iconEl.classList.toggle('rotate-180', collapsed);
   resizeCanvas();
+}
+
+let leftPanelCollapsed = false;
+const catRailEl = document.getElementById('catRail');
+const invPanelEl = document.getElementById('invPanel');
+const leftPanelToggleIcon = document.getElementById('leftPanelToggleIcon');
+document.getElementById('leftPanelToggle').addEventListener('click', () => {
+  leftPanelCollapsed = !leftPanelCollapsed;
+  setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, leftPanelCollapsed);
 });
+
+let quotePanelCollapsed = false;
+const quotePanel = document.getElementById('quotePanel');
+const quotePanelToggleArrowIcon = document.getElementById('quotePanelToggleArrowIcon');
+const btnQuoteToggle = document.getElementById('btnQuoteToggle');
+function toggleQuotePanel() {
+  quotePanelCollapsed = !quotePanelCollapsed;
+  setPanelCollapsed([quotePanel], quotePanelToggleArrowIcon, quotePanelCollapsed);
+  btnQuoteToggle.classList.toggle('bg-sky-600/70', !quotePanelCollapsed);
+}
+document.getElementById('quotePanelToggleArrow').addEventListener('click', toggleQuotePanel);
+btnQuoteToggle.addEventListener('click', toggleQuotePanel);
 
 /* ---------------------------------------------------------
    SELECTION TOOLBAR (rotate / duplicate / delete)
