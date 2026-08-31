@@ -54,6 +54,16 @@
     <button id="btnLock" title="Bloquear edición" class="p-2 rounded hover:bg-slate-800">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
     </button>
+    <button id="btnPan" title="Mano (arrastra para mover el tablero)" class="p-2 rounded hover:bg-slate-800">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="2.5" y="9" width="4.5" height="5" rx="2.2"/>
+        <rect x="6.5" y="3" width="2.3" height="11" rx="1.15"/>
+        <rect x="9.3" y="1.5" width="2.3" height="12.5" rx="1.15"/>
+        <rect x="12.1" y="1.5" width="2.3" height="12.5" rx="1.15"/>
+        <rect x="14.9" y="3" width="2.3" height="11" rx="1.15"/>
+        <rect x="6" y="12" width="11.5" height="10" rx="4"/>
+      </svg>
+    </button>
 
     <div class="w-px h-6 bg-slate-700 mx-1"></div>
 
@@ -607,10 +617,10 @@ boardWrap.addEventListener('drop', (e) => {
   const itemId = e.dataTransfer.getData('itemId');
   const itemDef = ITEM_BY_ID[itemId] || CUSTOM_ITEMS_BY_ID[itemId];
   if (!itemDef) return;
-  const rect = canvasEl.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / zoom;
-  const y = (e.clientY - rect.top) / zoom;
-  addItemToCanvas(itemDef, gridOn ? snap(x) : x, gridOn ? snap(y) : y);
+  // getPointer (not a manual clientX/rect calc) so this lands correctly even
+  // after panning the board with the hand tool, not just when zoomed.
+  const pointer = canvas.getPointer(e);
+  addItemToCanvas(itemDef, gridOn ? snap(pointer.x) : pointer.x, gridOn ? snap(pointer.y) : pointer.y);
 });
 
 /* ---------------------------------------------------------
@@ -791,6 +801,48 @@ btnLock.addEventListener('click', () => {
   canvas.discardActiveObject();
   canvas.requestRenderAll();
   selToolbar.classList.add('hidden');
+});
+
+/* ---------------------------------------------------------
+   MANO (pan tool) — arrastra el tablero para moverlo en
+   cualquier dirección, en vez de mover/seleccionar objetos.
+--------------------------------------------------------- */
+let panMode = false;
+let isPanning = false;
+let lastPanPoint = null;
+const btnPan = document.getElementById('btnPan');
+
+btnPan.addEventListener('click', () => {
+  panMode = !panMode;
+  btnPan.classList.toggle('bg-sky-600/70', panMode);
+  canvas.selection = !panMode;
+  canvas.skipTargetFind = panMode;
+  canvas.discardActiveObject();
+  canvas.requestRenderAll();
+  selToolbar.classList.add('hidden');
+  canvasHoverTooltip.classList.add('hidden');
+  boardWrap.style.cursor = panMode ? 'grab' : '';
+});
+
+canvas.on('mouse:down', (opt) => {
+  if (!panMode) return;
+  isPanning = true;
+  lastPanPoint = { x: opt.e.clientX, y: opt.e.clientY };
+  boardWrap.style.cursor = 'grabbing';
+});
+canvas.on('mouse:move', (opt) => {
+  if (!panMode || !isPanning) return;
+  const e = opt.e;
+  const vpt = canvas.viewportTransform;
+  vpt[4] += e.clientX - lastPanPoint.x;
+  vpt[5] += e.clientY - lastPanPoint.y;
+  canvas.requestRenderAll();
+  lastPanPoint = { x: e.clientX, y: e.clientY };
+});
+canvas.on('mouse:up', () => {
+  if (!panMode) return;
+  isPanning = false;
+  boardWrap.style.cursor = 'grab';
 });
 
 const zoomLabel = document.getElementById('zoomLabel');
