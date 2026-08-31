@@ -124,6 +124,9 @@
     <select id="loadSelect" class="bg-slate-800 text-xs rounded px-2 py-1.5 outline-none max-w-[8rem] sm:max-w-none">
       <option value="">Mis tableros…</option>
     </select>
+    <button id="btnDeleteBoard" title="Eliminar el tablero seleccionado en la lista" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-red-400 disabled:opacity-30 disabled:pointer-events-none" disabled>
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <button id="btnNew" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600">Nuevo</button>
     <input id="fileImportInput" type="file" accept=".json,application/json" class="hidden" />
     <button id="btnOpenFile" title="Abrir un tablero guardado como archivo .json" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 flex items-center gap-1.5">
@@ -1036,6 +1039,15 @@ document.getElementById('btnAddItem').addEventListener('click', () => openItemMo
 --------------------------------------------------------- */
 function formatCOP(n) { return '$' + Math.round(n || 0).toLocaleString('es-CO'); }
 
+/* Cantidad por objeto en la cotización: por defecto es cuántas copias hay
+   en el tablero, pero se puede escribir un número distinto a mano (por
+   ejemplo, un solo ícono en el plano pero 2 unidades reales en la
+   cotización) — ese valor manual queda guardado aquí, por itemId, y
+   viaja con el tablero (Guardar / Guardar archivo / Compartir). Se
+   olvida solo cuando el objeto ya no está en absoluto en el tablero.
+--------------------------------------------------------- */
+let quoteQtyOverrides = {};
+
 function rebuildQuote() {
   const quoteBody = document.getElementById('quoteBody');
   const quoteGrandTotal = document.getElementById('quoteGrandTotal');
@@ -1047,12 +1059,14 @@ function rebuildQuote() {
     counts[obj.itemId] = (counts[obj.itemId] || 0) + 1;
   });
   const itemIds = Object.keys(counts);
+  Object.keys(quoteQtyOverrides).forEach(id => { if (!counts[id]) delete quoteQtyOverrides[id]; });
 
   const byCategory = {};
   itemIds.forEach(id => {
     const dbItem = CUSTOM_ITEMS_BY_ID[id];
+    const qty = quoteQtyOverrides[id] != null ? quoteQtyOverrides[id] : counts[id];
     const qcId = QUOTE_CATEGORY_BY_ID[dbItem.quoteCategory] ? dbItem.quoteCategory : 'otros-q';
-    (byCategory[qcId] = byCategory[qcId] || []).push({ dbItem, qty: counts[id] });
+    (byCategory[qcId] = byCategory[qcId] || []).push({ dbItem, qty, itemId: id });
   });
 
   // Fijas: las 26/27 categorías siempre se muestran, en este orden, tengan
@@ -1073,7 +1087,7 @@ function rebuildQuote() {
     if (rows.length) {
       const rowsWrap = document.createElement('div');
       rowsWrap.className = 'divide-y divide-slate-100';
-      rows.forEach(({ dbItem, qty }) => {
+      rows.forEach(({ dbItem, qty, itemId }) => {
         const unit = dbItem.priceNoTax || 0;
         const lineTotal = unit * qty;
         subtotal += lineTotal;
@@ -1088,7 +1102,9 @@ function rebuildQuote() {
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-1">
               <span class="text-slate-400 text-[9px] font-mono">${dbItem.code}</span>
-              <span class="text-slate-400 text-[9px]">x${qty}</span>
+              <span class="text-slate-400 text-[9px] shrink-0">Cant.
+                <input type="number" min="1" step="1" value="${qty}" class="js-quote-qty w-9 text-center text-[9px] text-slate-700 border border-slate-200 rounded px-0.5 py-0.5 outline-none focus:ring-1 focus:ring-sky-400" />
+              </span>
             </div>
             <p class="text-slate-700 text-[10px] leading-tight truncate">${dbItem.name}</p>
             <div class="flex items-center justify-between text-[10px]">
@@ -1097,6 +1113,13 @@ function rebuildQuote() {
             </div>
           </div>
         `;
+        const qtyInput = row.querySelector('.js-quote-qty');
+        qtyInput.addEventListener('click', (e) => e.stopPropagation());
+        qtyInput.addEventListener('change', () => {
+          const n = Math.max(1, Math.round(Number(qtyInput.value)) || 1);
+          quoteQtyOverrides[itemId] = n;
+          pushHistory();
+        });
         rowsWrap.appendChild(row);
       });
       block.appendChild(rowsWrap);
@@ -1329,7 +1352,10 @@ let historyIndex = -1;
 let restoring = false;
 
 function serializeState() {
-  return JSON.stringify(canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented', 'isPhotoItem', 'isArrowItem', 'arrowKind']));
+  return JSON.stringify({
+    canvas: canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented', 'isPhotoItem', 'isArrowItem', 'arrowKind']),
+    quoteQty: quoteQtyOverrides,
+  });
 }
 function pushHistory() {
   if (restoring) return;
@@ -1345,7 +1371,19 @@ function updateHistoryButtons() {
 }
 function loadState(json) {
   restoring = true;
-  canvas.loadFromJSON(json, () => {
+  // serializeState() wraps { canvas, quoteQty } — unwrap when present.
+  // Callers that already pass a bare Fabric canvas JSON (e.g. Abrir
+  // archivo, which unwraps its own {canvas, quoteQty} file format first)
+  // are responsible for setting quoteQtyOverrides themselves beforehand.
+  let canvasJson = json;
+  try {
+    const parsed = typeof json === 'string' ? JSON.parse(json) : json;
+    if (parsed && parsed.canvas && parsed.canvas.objects) {
+      canvasJson = parsed.canvas;
+      quoteQtyOverrides = parsed.quoteQty || {};
+    }
+  } catch (err) { /* not JSON-parseable as a wrapper — treat as bare canvas JSON */ }
+  canvas.loadFromJSON(canvasJson, () => {
     gridGroup = null;
     drawGrid();
     // setControlsVisibility isn't part of Fabric's own serialization, so
@@ -1409,6 +1447,10 @@ function refreshLoadSelect() {
     opt.value = name; opt.textContent = name;
     sel.appendChild(opt);
   });
+  updateDeleteBoardBtn();
+}
+function updateDeleteBoardBtn() {
+  document.getElementById('btnDeleteBoard').disabled = !document.getElementById('loadSelect').value;
 }
 refreshLoadSelect();
 
@@ -1419,9 +1461,22 @@ document.getElementById('btnSave').addEventListener('click', () => {
   setSavedBoards(boards);
   refreshLoadSelect();
   document.getElementById('loadSelect').value = name;
+  updateDeleteBoardBtn();
+});
+
+document.getElementById('btnDeleteBoard').addEventListener('click', () => {
+  const sel = document.getElementById('loadSelect');
+  const name = sel.value;
+  if (!name) return;
+  if (!confirm(`¿Eliminar el tablero guardado "${name}"? Esta acción no se puede deshacer.`)) return;
+  const boards = getSavedBoards();
+  delete boards[name];
+  setSavedBoards(boards);
+  refreshLoadSelect();
 });
 
 document.getElementById('loadSelect').addEventListener('change', (e) => {
+  updateDeleteBoardBtn();
   const name = e.target.value;
   if (!name) return;
   const boards = getSavedBoards();
@@ -1438,6 +1493,7 @@ document.getElementById('btnNew').addEventListener('click', () => {
   canvas.clear();
   gridGroup = null;
   drawGrid();
+  quoteQtyOverrides = {};
   document.getElementById('boardName').value = 'Proyecto sin título';
   document.getElementById('loadSelect').value = '';
   history = [];
@@ -1579,7 +1635,7 @@ document.getElementById('btnLogout').addEventListener('click', () => {
 --------------------------------------------------------- */
 document.getElementById('btnSaveFile').addEventListener('click', () => {
   const name = document.getElementById('boardName').value.trim() || 'Proyecto sin título';
-  const data = { app: 'tablero-piscinas', version: 1, name, canvas: canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented', 'isPhotoItem', 'isArrowItem', 'arrowKind']) };
+  const data = { app: 'tablero-piscinas', version: 1, name, canvas: canvas.toJSON(['itemId', 'itemName', 'selectable', 'evented', 'isPhotoItem', 'isArrowItem', 'arrowKind']), quoteQty: quoteQtyOverrides };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1601,10 +1657,11 @@ fileImportInput.addEventListener('change', (e) => {
     try { data = JSON.parse(reader.result); }
     catch { alert('No se pudo abrir el archivo: no es un .json válido.'); return; }
     const canvasJson = data.canvas || data;
+    quoteQtyOverrides = data.quoteQty || {};
     loadState(canvasJson);
     document.getElementById('boardName').value = data.name || 'Proyecto sin título';
     document.getElementById('loadSelect').value = '';
-    history = [JSON.stringify(canvasJson)];
+    history = [JSON.stringify({ canvas: canvasJson, quoteQty: quoteQtyOverrides })];
     historyIndex = 0;
     updateHistoryButtons();
   };
