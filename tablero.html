@@ -1335,7 +1335,11 @@ function setActiveTab(tab) {
   if (isProductos) requestAnimationFrame(resizeCanvas);
   else renderQuotesPanel();
 }
-tabBtnProductos.addEventListener('click', () => setActiveTab('productos'));
+tabBtnProductos.addEventListener('click', () => {
+  setActiveTab('productos');
+  leftPanelCollapsed = true;
+  setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, true);
+});
 tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
 
 /* ---------------------------------------------------------
