@@ -183,51 +183,85 @@
    CATÁLOGO DE EQUIPOS (placeholders, iconos dibujados a mano)
 --------------------------------------------------------- */
 const CATALOG = [
-  { id: 'bombeo', label: 'Bombeo', color: '#2563eb', items: [
+  { id: 'motobombas', label: 'Motobombas', color: '#2563eb', items: [
       { id: 'bomba-centrifuga', name: 'Bomba centrífuga', shape: 'pump' },
-      { id: 'bomba-calor', name: 'Bomba de calor', shape: 'heatpump' },
-      { id: 'variador', name: 'Variador de velocidad', shape: 'panel' },
   ]},
   { id: 'filtracion', label: 'Filtración', color: '#0891b2', items: [
       { id: 'filtro-arena', name: 'Filtro de arena', shape: 'filter' },
       { id: 'filtro-cartucho', name: 'Filtro de cartucho', shape: 'filter' },
       { id: 'valvula-selectora', name: 'Válvula selectora', shape: 'valve' },
   ]},
-  { id: 'calefaccion', label: 'Calefacción', color: '#ea580c', items: [
+  { id: 'iluminacion', label: 'Iluminación', color: '#d97706', items: [
+      { id: 'led-sumergible', name: 'Luz LED sumergible', shape: 'light' },
+      { id: 'reflector-spa', name: 'Reflector de spa', shape: 'light' },
+  ]},
+  { id: 'complementos-iluminacion', label: 'Complementos Iluminación', color: '#f59e0b', items: [
+      { id: 'fibra-optica', name: 'Fibra óptica', shape: 'fiber' },
+  ]},
+  { id: 'sistemas-desinfeccion', label: 'Sistemas de desinfección', color: '#0d9488', items: [
+      { id: 'clorador-salino', name: 'Clorador salino', shape: 'chlorinator' },
+      { id: 'dosificador', name: 'Dosificador automático', shape: 'doser' },
+  ]},
+  { id: 'calefaccion-gas', label: 'Calefacción a gas', color: '#dc2626', items: [
+      { id: 'calentador-gas', name: 'Calentador a gas', shape: 'heater' },
+  ]},
+  { id: 'calefaccion-energia', label: 'Calefacción Energía', color: '#ea580c', items: [
+      { id: 'bomba-calor', name: 'Bomba de calor', shape: 'heatpump' },
       { id: 'calentador-electrico', name: 'Calentador eléctrico', shape: 'heater' },
       { id: 'calentador-solar', name: 'Calentador solar', shape: 'solar' },
       { id: 'intercambiador', name: 'Intercambiador de calor', shape: 'heater' },
   ]},
-  { id: 'iluminacion', label: 'Iluminación', color: '#d97706', items: [
-      { id: 'led-sumergible', name: 'Luz LED sumergible', shape: 'light' },
-      { id: 'reflector-spa', name: 'Reflector de spa', shape: 'light' },
-      { id: 'fibra-optica', name: 'Fibra óptica', shape: 'fiber' },
+  { id: 'automatizacion', label: 'Automatización', color: '#7c3aed', items: [
+      { id: 'variador', name: 'Variador de velocidad', shape: 'panel' },
+      { id: 'tablero-control', name: 'Tablero de control', shape: 'panel' },
+      { id: 'wifi-automatizacion', name: 'Automatización WiFi', shape: 'wifi' },
   ]},
-  { id: 'limpieza', label: 'Limpieza', color: '#059669', items: [
+  { id: 'complementos-automatizacion', label: 'Complementos automatización', color: '#a78bfa', items: [
+      { id: 'sensor-temp', name: 'Sensor de temperatura', shape: 'sensor' },
+  ]},
+  { id: 'wellness', label: 'Wellness', color: '#ec4899', items: [
+      { id: 'escalon-spa', name: 'Escalón de spa', shape: 'step' },
+  ]},
+  { id: 'accesorios-electricos-hidraulicos', label: 'Accesorios Eléctricos e Hidráulicos', color: '#64748b', items: [
+      { id: 'valvula-bola', name: 'Válvula de bola', shape: 'valve' },
+      { id: 'caja-conexion', name: 'Caja de conexión eléctrica', shape: 'panel' },
+  ]},
+  { id: 'saber-hacer', label: 'Saber hacer', color: '#eab308', items: [
+      { id: 'asesoria-tecnica', name: 'Asesoría técnica', shape: 'idea' },
+  ]},
+  { id: 'mano-obra', label: 'Mano de obra', color: '#78716c', items: [
+      { id: 'instalacion-mano-obra', name: 'Instalación y mano de obra', shape: 'wrench' },
+  ]},
+  { id: 'robots-aseo', label: 'Robots de Aseo', color: '#059669', items: [
       { id: 'robot-limpiafondos', name: 'Robot limpiafondos', shape: 'robot' },
-      { id: 'skimmer', name: 'Skimmer', shape: 'skimmer' },
+  ]},
+  { id: 'elementos-aseo-quimicos', label: 'Elementos de Aseo y Químicos', color: '#10b981', items: [
       { id: 'aspiradora-manual', name: 'Aspiradora manual', shape: 'vacuum' },
-  ]},
-  { id: 'hidromasaje', label: 'Hidromasaje', color: '#9333ea', items: [
-      { id: 'jet-direccional', name: 'Jet direccional', shape: 'jet' },
-      { id: 'jet-turbo', name: 'Jet turbo de spa', shape: 'jet' },
-      { id: 'soplador-aire', name: 'Soplador de aire', shape: 'blower' },
-  ]},
-  { id: 'quimicos', label: 'Químicos', color: '#0d9488', items: [
-      { id: 'clorador-salino', name: 'Clorador salino', shape: 'chlorinator' },
-      { id: 'dosificador', name: 'Dosificador automático', shape: 'doser' },
       { id: 'kit-prueba', name: 'Kit de prueba', shape: 'testkit' },
   ]},
-  { id: 'estructura', label: 'Estructura', color: '#475569', items: [
+  { id: 'material-vaso-piscina', label: 'Material Vaso Piscina', color: '#475569', items: [
       { id: 'escalera', name: 'Escalera de piscina', shape: 'ladder' },
-      { id: 'escalon-spa', name: 'Escalón de spa', shape: 'step' },
       { id: 'cubierta-termica', name: 'Cubierta térmica', shape: 'cover' },
-      { id: 'sombrilla', name: 'Sombrilla', shape: 'umbrella' },
+      { id: 'skimmer', name: 'Skimmer', shape: 'skimmer' },
   ]},
-  { id: 'control', label: 'Control', color: '#e11d48', items: [
-      { id: 'tablero-control', name: 'Tablero de control', shape: 'panel' },
-      { id: 'sensor-temp', name: 'Sensor de temperatura', shape: 'sensor' },
-      { id: 'wifi-automatizacion', name: 'Automatización WiFi', shape: 'wifi' },
+  { id: 'hidrojets', label: 'Hidrojets', color: '#9333ea', items: [
+      { id: 'jet-direccional', name: 'Jet direccional', shape: 'jet' },
+      { id: 'jet-turbo', name: 'Jet turbo de spa', shape: 'jet' },
+  ]},
+  { id: 'seguridad-piscina', label: 'Seguridad Piscina', color: '#e11d48', items: [
+      { id: 'alarma-piscina', name: 'Alarma de piscina', shape: 'bell' },
+  ]},
+  { id: 'sopladores', label: 'Sopladores', color: '#0ea5e9', items: [
+      { id: 'soplador-aire', name: 'Soplador de aire', shape: 'blower' },
+  ]},
+  { id: 'nado-contracorriente', label: 'Nado Contracorriente', color: '#6366f1', items: [
+      { id: 'nado-contracorriente-item', name: 'Sistema de nado contracorriente', shape: 'jet' },
+  ]},
+  { id: 'maderas-saunas', label: 'Maderas Saunas', color: '#92400e', items: [
+      { id: 'sauna-madera', name: 'Sauna de madera', shape: 'cabin' },
+  ]},
+  { id: 'otros', label: 'Otros', color: '#6b7280', items: [
+      { id: 'sombrilla', name: 'Sombrilla', shape: 'umbrella' },
   ]},
 ];
 const ITEM_BY_ID = {};
@@ -261,6 +295,10 @@ function iconSVG(shape, color) {
     umbrella: `<path d="M12 26a20 20 0 0 1 40 0z" fill="#fff"/><line x1="32" y1="26" x2="32" y2="52" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M32 52c0 3-3 4-5 2" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`,
     sensor: `<circle cx="32" cy="34" r="4" fill="#fff"/><path d="M22 30a14 14 0 0 1 20 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M16 24a22 22 0 0 1 32 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0.6"/>`,
     wifi: `<circle cx="32" cy="44" r="4" fill="#fff"/><path d="M22 36a14 14 0 0 1 20 0" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/><path d="M14 28a26 26 0 0 1 36 0" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity="0.55"/>`,
+    idea: `<circle cx="32" cy="24" r="12" fill="#fff"/><rect x="27" y="34" width="10" height="8" rx="2" fill="#fff"/><g stroke="${color}" stroke-width="2"><line x1="30" y1="38" x2="34" y2="38"/><line x1="30" y1="42" x2="34" y2="42"/></g><g stroke="#fff" stroke-width="3" stroke-linecap="round"><line x1="32" y1="6" x2="32" y2="10"/><line x1="14" y1="24" x2="18" y2="24"/><line x1="46" y1="24" x2="50" y2="24"/></g>`,
+    wrench: `<circle cx="20" cy="20" r="7" fill="none" stroke="#fff" stroke-width="4"/><circle cx="44" cy="44" r="7" fill="none" stroke="#fff" stroke-width="4"/><line x1="25" y1="25" x2="39" y2="39" stroke="#fff" stroke-width="6" stroke-linecap="round"/>`,
+    bell: `<polygon points="26,14 38,14 42,32 46,40 18,40 22,32" fill="#fff"/><circle cx="32" cy="45" r="3" fill="#fff"/>`,
+    cabin: `<polygon points="14,28 50,28 32,12" fill="#fff"/><rect x="18" y="28" width="28" height="20" fill="#fff"/><rect x="28" y="36" width="8" height="12" fill="${color}"/>`,
   };
   return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
     <rect x="1" y="1" width="62" height="62" rx="14" fill="${color}"/>
@@ -380,6 +418,10 @@ function glyphFabricParts(shape, color) {
     case 'umbrella': return [ new fabric.Path(`M ${tx(12)} ${tx(26)} A ${tx(20)} ${tx(20)} 0 0 1 ${tx(52)} ${tx(26)} Z`, { fill:'#fff', selectable:false }), line(32,26,32,52) ];
     case 'sensor': return [ circ(32,34,4), new fabric.Path(`M ${tx(22)} ${tx(30)} A ${tx(14)} ${tx(14)} 0 0 1 ${tx(42)} ${tx(30)}`, { fill:'transparent', stroke:'#fff', strokeWidth:3, selectable:false }) ];
     case 'wifi': return [ circ(32,44,4), new fabric.Path(`M ${tx(22)} ${tx(36)} A ${tx(14)} ${tx(14)} 0 0 1 ${tx(42)} ${tx(36)}`, { fill:'transparent', stroke:'#fff', strokeWidth:3.5, selectable:false }), new fabric.Path(`M ${tx(14)} ${tx(28)} A ${tx(26)} ${tx(26)} 0 0 1 ${tx(50)} ${tx(28)}`, { fill:'transparent', stroke:'#fff', strokeWidth:3.5, opacity:0.55, selectable:false }) ];
+    case 'idea': return [ circ(32,24,12), rect(27,34,10,8,2), line(30,38,34,38,{w:2,stroke:color}), line(30,42,34,42,{w:2,stroke:color}), line(32,6,32,10), line(14,24,18,24), line(46,24,50,24) ];
+    case 'wrench': return [ circ(20,20,7,'transparent',true), circ(44,44,7,'transparent',true), line(25,25,39,39,{w:6}) ];
+    case 'bell': return [ new fabric.Polygon([{x:tx(26),y:tx(14)},{x:tx(38),y:tx(14)},{x:tx(42),y:tx(32)},{x:tx(46),y:tx(40)},{x:tx(18),y:tx(40)},{x:tx(22),y:tx(32)}], { fill:'#fff', selectable:false }), circ(32,45,3) ];
+    case 'cabin': return [ new fabric.Polygon([{x:tx(14),y:tx(28)},{x:tx(50),y:tx(28)},{x:tx(32),y:tx(12)}], { fill:'#fff', selectable:false }), rect(18,28,28,20,0), rect(28,36,8,12,0,color) ];
     default: return [ circ(32,32,16) ];
   }
 }
