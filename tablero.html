@@ -1053,9 +1053,11 @@ function rebuildQuote() {
   QUOTE_CATEGORIES.forEach(qc => {
     const rows = byCategory[qc.id] || [];
 
+    const isOptional = qc.label.toLowerCase().includes('(opcional)');
+    const headerColor = isOptional ? 'bg-orange-400' : 'bg-sky-400';
     const block = document.createElement('div');
     block.className = 'rounded-lg overflow-hidden border border-slate-200';
-    block.innerHTML = `<div class="bg-sky-400 text-white text-center font-bold text-[10px] py-1.5 px-2 uppercase leading-tight">${qc.label}</div>`;
+    block.innerHTML = `<div class="${headerColor} text-white text-center font-bold text-[10px] py-1.5 px-2 uppercase leading-tight">${qc.label}</div>`;
 
     let subtotal = 0;
     if (rows.length) {
