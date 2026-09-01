@@ -374,6 +374,14 @@
           <textarea id="quoteClientNote" rows="3" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Un mensaje especial para este cliente…"></textarea>
         </div>
 
+        <div class="pt-2 border-t border-slate-200">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Responsable de gestionarla</label>
+          <select id="quoteOwnerSelect" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white">
+            <option value="">Sin asignar</option>
+          </select>
+          <p class="text-[10px] text-slate-400 mt-1">Si pasan más de 10 días sin cerrarla, se le podrá recordar por WhatsApp desde el Panel Cotizaciones.</p>
+        </div>
+
         <div class="pt-2 border-t border-slate-200 space-y-2">
           <button id="btnQuoteDocDownloadPdf" class="w-full text-xs font-semibold text-white rounded-lg py-2.5 bg-slate-800 hover:bg-slate-700 flex items-center justify-center gap-1.5">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -521,6 +529,11 @@
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">Nombre</label>
         <input id="kanbanMemberName" type="text" required class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Nombre del integrante" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Teléfono / WhatsApp (opcional)</label>
+        <input id="kanbanMemberPhone" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Ej. 3001234567" />
+        <p class="text-[10px] text-slate-400 mt-1">Necesario para poder recordarle por WhatsApp cotizaciones vencidas asignadas a esta persona.</p>
       </div>
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">Color</label>
@@ -1551,8 +1564,20 @@ function renderQuoteDocPreview() {
 }
 
 const quoteDocModal = document.getElementById('quoteDocModal');
+let quoteOwnerCandidates = [];
+function populateQuoteOwnerSelect() {
+  const sel = document.getElementById('quoteOwnerSelect');
+  const current = sel.value;
+  return idbGetAllMembers().then(members => {
+    quoteOwnerCandidates = members;
+    sel.innerHTML = '<option value="">Sin asignar</option>' +
+      members.map(m => `<option value="${m.id}">${escapeHtml(m.name)}${m.phone ? '' : ' (sin teléfono)'}</option>`).join('');
+    if (members.some(m => m.id === current)) sel.value = current;
+  });
+}
 document.getElementById('btnGenerateQuoteDoc').addEventListener('click', () => {
   quoteDocModal.classList.remove('hidden');
+  populateQuoteOwnerSelect();
   renderQuoteDocPreview();
 });
 document.getElementById('quoteDocModalClose').addEventListener('click', () => quoteDocModal.classList.add('hidden'));
@@ -1629,6 +1654,9 @@ function currentQuoteSnapshot() {
     categories.push({ label: qc.label, subtotal, items });
   });
 
+  const ownerId = document.getElementById('quoteOwnerSelect').value || null;
+  const owner = ownerId ? quoteOwnerCandidates.find(m => m.id === ownerId) : null;
+
   return {
     id: 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     createdAt: Date.now(),
@@ -1636,6 +1664,9 @@ function currentQuoteSnapshot() {
     clientName, clientCompany, clientPhone, clientEmail, clientProject, clientNote,
     categories, grandTotal,
     status: 'pendiente',
+    ownerId,
+    ownerName: owner ? owner.name : null,
+    ownerPhone: owner ? (owner.phone || null) : null,
   };
 }
 
@@ -1648,6 +1679,27 @@ const QUOTE_STATUSES = [
   { id: 'autorizada', label: 'Autorizada', activeClass: 'bg-sky-500 text-white', inactiveClass: 'bg-sky-50 text-sky-600 hover:bg-sky-100' },
   { id: 'facturada', label: 'Facturada', activeClass: 'bg-emerald-500 text-white', inactiveClass: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' },
 ];
+
+/* Semáforo de seguimiento: verde/amarillo/rojo según cuántos días
+   calendario lleva la cotización desde que se creó — solo aplica
+   mientras sigue "Pendiente" (una vez Autorizada/Facturada ya no
+   importa el reloj). A partir de 10 días se ofrece un recordatorio
+   por WhatsApp al responsable (un botón que abre el mensaje ya
+   redactado — no hay envío automático real, ver README). */
+const QUOTE_ALERT_DAYS = 10;
+const QUOTE_WARNING_DAYS = 7;
+function quoteAgeInfo(quote) {
+  const days = Math.max(0, Math.floor((Date.now() - (quote.createdAt || Date.now())) / 86400000));
+  const dayWord = `hace ${days} día${days === 1 ? '' : 's'}`;
+  if (days >= QUOTE_ALERT_DAYS) return { days, level: 'red', dotClass: 'bg-red-500', label: `Vencida · ${dayWord}` };
+  if (days >= QUOTE_WARNING_DAYS) return { days, level: 'yellow', dotClass: 'bg-amber-400', label: `Por vencer · ${dayWord}` };
+  return { days, level: 'green', dotClass: 'bg-emerald-400', label: `Al día · ${dayWord}` };
+}
+function waReminderLink(phone, message) {
+  const digits = (phone || '').replace(/\D/g, '');
+  const withCountry = digits.length === 10 ? '57' + digits : digits;
+  return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
+}
 
 function renderQuotesPanel() {
   idbGetAllQuotes().then(quotes => {
@@ -1663,6 +1715,9 @@ function renderQuotesPanel() {
       card.className = 'bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center gap-4 flex-wrap';
       const dateStr = new Date(q.createdAt).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       const itemCount = q.categories.reduce((n, c) => n + c.items.length, 0);
+      const age = quoteAgeInfo(q);
+      const isPending = q.status === 'pendiente';
+
       card.innerHTML = `
         <div class="flex-1 min-w-[180px]">
           <div class="text-sm font-semibold text-slate-800">${escapeHtml(q.clientName) || 'Cliente sin nombre'}</div>
@@ -1674,6 +1729,18 @@ function renderQuotesPanel() {
         <button class="js-quote-delete p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 shrink-0" title="Eliminar cotización">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
+        ${isPending ? `
+        <div class="w-full flex items-center justify-between gap-2 pt-2 mt-1 border-t border-slate-100 text-[11px]">
+          <div class="flex items-center gap-1.5 text-slate-500">
+            <span class="w-2 h-2 rounded-full shrink-0 ${age.dotClass}"></span>
+            <span>${age.label}</span>
+            <span class="text-slate-300">·</span>
+            ${q.ownerName
+              ? `<span>Responsable: <span class="font-medium text-slate-600">${escapeHtml(q.ownerName)}</span></span>`
+              : `<span class="italic text-slate-300">Sin responsable asignado</span>`}
+          </div>
+          <div class="js-quote-reminder shrink-0"></div>
+        </div>` : ''}
       `;
       const statusGroup = card.querySelector('.js-quote-status-group');
       QUOTE_STATUSES.forEach(st => {
@@ -1687,6 +1754,23 @@ function renderQuotesPanel() {
         });
         statusGroup.appendChild(btn);
       });
+
+      if (isPending && age.level === 'red') {
+        const reminderWrap = card.querySelector('.js-quote-reminder');
+        if (q.ownerPhone) {
+          const msg = `Hola ${firstNameOf(q.ownerName)}, la cotización de ${q.clientName || 'un cliente'} (${q.boardName}) lleva ${age.days} días como Pendiente — ¿la revisamos para cerrarla?`;
+          const link = document.createElement('a');
+          link.href = waReminderLink(q.ownerPhone, msg);
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.className = 'inline-flex items-center gap-1.5 text-[10px] font-semibold text-white bg-emerald-500 hover:bg-emerald-400 rounded-full px-2.5 py-1.5';
+          link.innerHTML = `<svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.92 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.05 2m0 1.67c2.2 0 4.26.86 5.82 2.42a8.19 8.19 0 0 1 2.41 5.82c0 4.55-3.7 8.25-8.24 8.25a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.18 8.18 0 0 1-1.26-4.38c0-4.55 3.7-8.25 8.25-8.25M8.53 6.6c-.16 0-.43.06-.66.31s-.87.86-.87 2.09.9 2.42 1.02 2.58 1.76 2.83 4.38 3.86c2.17.85 2.61.68 3.08.64s1.52-.62 1.74-1.22.22-1.11.15-1.22-.25-.17-.53-.31-1.63-.8-1.88-.9-.44-.13-.62.14-.7.9-.86 1.08-.32.2-.6.07-1.16-.43-2.2-1.36c-.82-.73-1.36-1.63-1.53-1.9s-.02-.43.12-.57c.13-.13.29-.34.43-.5s.19-.28.29-.47.05-.35-.02-.5-.62-1.5-.86-2.04-.46-.47-.63-.48h-.36z"/></svg>Recordar`;
+          reminderWrap.appendChild(link);
+        } else {
+          reminderWrap.innerHTML = `<span class="text-[10px] text-slate-300 italic">Asigna un responsable con teléfono para poder recordarle</span>`;
+        }
+      }
+
       card.querySelector('.js-quote-delete').addEventListener('click', () => {
         if (!confirm('¿Eliminar esta cotización del historial?')) return;
         idbDeleteQuote(q.id).then(renderQuotesPanel);
@@ -1989,10 +2073,11 @@ kanbanMemberModal.addEventListener('click', (e) => { if (e.target === kanbanMemb
 document.getElementById('kanbanMemberForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const name = document.getElementById('kanbanMemberName').value.trim();
+  const phone = document.getElementById('kanbanMemberPhone').value.trim();
   const errEl = document.getElementById('kanbanMemberFormError');
   if (!name) { errEl.textContent = 'Escribe un nombre.'; errEl.classList.remove('hidden'); return; }
   errEl.classList.add('hidden');
-  const member = { id: 'member_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, color: kanbanSelectedColor };
+  const member = { id: 'member_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, color: kanbanSelectedColor, phone };
   idbPutMember(member).then(() => {
     kanbanMemberModal.classList.add('hidden');
     refreshKanbanData();

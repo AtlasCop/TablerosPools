@@ -54,8 +54,15 @@ create table if not exists quotes (
   "clientNote" text,
   categories jsonb,
   "grandTotal" numeric,
-  status text default 'pendiente'
+  status text default 'pendiente',
+  "ownerId" text,
+  "ownerName" text,
+  "ownerPhone" text
 );
+-- Por si la tabla ya existía de una corrida anterior de este script:
+alter table quotes add column if not exists "ownerId" text;
+alter table quotes add column if not exists "ownerName" text;
+alter table quotes add column if not exists "ownerPhone" text;
 
 -- Tareas del Tablero Kanban
 create table if not exists kanban_tasks (
@@ -69,12 +76,15 @@ create table if not exists kanban_tasks (
   "createdAt" bigint
 );
 
--- Equipo de trabajo (personas asignables en el Kanban)
+-- Equipo de trabajo (personas asignables en el Kanban y responsables de cotizaciones)
 create table if not exists kanban_members (
   id text primary key,
   name text not null,
-  color text
+  color text,
+  phone text
 );
+-- Por si la tabla ya existía de una corrida anterior de este script:
+alter table kanban_members add column if not exists phone text;
 
 -- ------------------------------------------------------------
 -- Acceso: el login de la app es solo una pantalla local (no hay
