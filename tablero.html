@@ -205,6 +205,7 @@
   <!-- VIEW TABS -->
   <div class="h-10 shrink-0 bg-white border-b border-slate-200 flex items-center gap-1 px-4 overflow-x-auto">
     <button id="tabBtnProductos" class="text-xs font-semibold px-4 py-2 border-b-2 border-sky-500 text-sky-600 transition-colors">Productos</button>
+    <button id="tabBtnInventario" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Inventario</button>
     <button id="tabBtnCotizaciones" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Panel Cotizaciones</button>
     <button id="tabBtnKanban" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero Kanban</button>
     <button id="tabBtnTablero3D" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero 3D</button>
@@ -312,6 +313,47 @@
         </button>
       </div>
     </aside>
+  </div>
+
+  <!-- INVENTARIO (tabla completa de todos los objetos, todas las categorías) -->
+  <div id="viewInventario" class="hidden flex-1 flex flex-col min-h-0 bg-slate-50">
+    <div class="px-6 pt-4 pb-3 border-b border-slate-200 bg-white shrink-0">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 class="text-sm font-bold text-slate-700">Inventario de objetos</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Todos los objetos creados, en todas las categorías, en una sola tabla.</p>
+        </div>
+        <span id="inventoryTableCount" class="text-xs text-slate-400 shrink-0"></span>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap mt-3">
+        <div class="relative flex-1 min-w-[220px] max-w-sm">
+          <svg class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+          <input id="inventoryTableSearch" type="text" placeholder="Buscar por código, nombre, sublínea o descripción…" class="w-full text-xs border border-slate-200 rounded pl-8 pr-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <select id="inventoryTableCategoryFilter" class="text-xs border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white">
+          <option value="">Todas las categorías</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex-1 overflow-auto">
+      <table class="w-full text-xs border-collapse">
+        <thead class="bg-white sticky top-0 z-10 shadow-sm">
+          <tr class="text-left text-slate-500 uppercase text-[10px]">
+            <th class="px-3 py-2.5 font-semibold">Foto</th>
+            <th class="js-inv-sort px-3 py-2.5 font-semibold cursor-pointer select-none hover:text-sky-600" data-key="code">Código</th>
+            <th class="js-inv-sort px-3 py-2.5 font-semibold cursor-pointer select-none hover:text-sky-600" data-key="name">Nombre</th>
+            <th class="px-3 py-2.5 font-semibold">Sublínea</th>
+            <th class="px-3 py-2.5 font-semibold">Descripción</th>
+            <th class="js-inv-sort px-3 py-2.5 font-semibold cursor-pointer select-none hover:text-sky-600" data-key="category">Categoría</th>
+            <th class="px-3 py-2.5 font-semibold">Categoría en cotización</th>
+            <th class="js-inv-sort px-3 py-2.5 font-semibold text-right cursor-pointer select-none hover:text-sky-600" data-key="price">Precio sin IVA</th>
+            <th class="px-3 py-2.5 font-semibold">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="inventoryTableBody"></tbody>
+      </table>
+      <p id="inventoryTableEmpty" class="hidden text-center text-sm text-slate-400 py-16">Aún no hay objetos en el inventario — agrégalos desde la pestaña Productos.</p>
+    </div>
   </div>
 
   <!-- PANEL COTIZACIONES (historial de cotizaciones generadas) -->
@@ -1468,6 +1510,7 @@ function renderCustomItemCards() {
       idbDeleteItem(dbItem.id).then(() => {
         delete CUSTOM_ITEMS_BY_ID[dbItem.id];
         renderInventory();
+        renderInventoryTable();
         rebuildQuote();
       });
     });
@@ -1482,6 +1525,119 @@ function renderCustomItemCards() {
   }
 }
 invSearchInput.addEventListener('input', renderCustomItemCards);
+
+/* ---------------------------------------------------------
+   INVENTARIO (tabla) — todos los objetos de todas las categorías en
+   una sola tabla, con búsqueda, filtro por categoría y orden por
+   columna. Reutiliza openItemModal()/idbDeleteItem() tal cual, así
+   que editar/eliminar desde aquí es exactamente lo mismo que hacerlo
+   desde la tarjeta en Productos (misma foto, mismo formulario).
+--------------------------------------------------------- */
+let inventoryTableSort = { key: 'name', dir: 'asc' };
+
+function populateInventoryTableCategoryFilter() {
+  const sel = document.getElementById('inventoryTableCategoryFilter');
+  sel.innerHTML = '<option value="">Todas las categorías</option>' +
+    CATALOG.map(cat => `<option value="${cat.id}">${escapeHtml(cat.label)}</option>`).join('');
+}
+
+function renderInventoryTable() {
+  const tbody = document.getElementById('inventoryTableBody');
+  if (!tbody) return; // la vista todavía no existe en el DOM (no debería pasar, pero por si acaso)
+
+  const query = document.getElementById('inventoryTableSearch').value.trim().toLowerCase();
+  const catFilter = document.getElementById('inventoryTableCategoryFilter').value;
+
+  let items = Object.values(CUSTOM_ITEMS_BY_ID);
+  if (catFilter) items = items.filter(it => it.categoryId === catFilter);
+  if (query) {
+    items = items.filter(it =>
+      (it.code || '').toLowerCase().includes(query) ||
+      (it.name || '').toLowerCase().includes(query) ||
+      (it.subline || '').toLowerCase().includes(query) ||
+      (it.description || '').toLowerCase().includes(query)
+    );
+  }
+
+  const { key, dir } = inventoryTableSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  items.sort((a, b) => {
+    let va, vb;
+    if (key === 'price') { va = a.priceNoTax || 0; vb = b.priceNoTax || 0; }
+    else if (key === 'category') { va = (CATEGORY_BY_ID[a.categoryId] || {}).label || ''; vb = (CATEGORY_BY_ID[b.categoryId] || {}).label || ''; }
+    else { va = (a[key] || ''); vb = (b[key] || ''); }
+    if (typeof va === 'string') return va.localeCompare(vb) * mul;
+    return (va - vb) * mul;
+  });
+
+  document.querySelectorAll('.js-inv-sort').forEach(th => {
+    th.classList.toggle('text-sky-600', th.dataset.key === key);
+  });
+
+  document.getElementById('inventoryTableCount').textContent = `${items.length} objeto${items.length === 1 ? '' : 's'}`;
+  document.getElementById('inventoryTableEmpty').classList.toggle('hidden', items.length > 0);
+
+  tbody.innerHTML = '';
+  items.forEach(it => {
+    const cat = CATEGORY_BY_ID[it.categoryId];
+    const qc = QUOTE_CATEGORY_BY_ID[it.quoteCategory];
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-slate-100 hover:bg-slate-50';
+    tr.innerHTML = `
+      <td class="px-3 py-2">${it.imageDataUrl
+        ? `<img src="${it.imageDataUrl}" class="w-9 h-9 rounded object-cover border border-slate-100" />`
+        : `<div class="w-9 h-9 rounded bg-slate-100"></div>`}</td>
+      <td class="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">${escapeHtml(it.code)}</td>
+      <td class="px-3 py-2 font-medium text-slate-700">${escapeHtml(it.name)}</td>
+      <td class="px-3 py-2 text-slate-500">${escapeHtml(it.subline) || '—'}</td>
+      <td class="px-3 py-2 text-slate-400 max-w-[220px] truncate" title="${escapeHtml(it.description || '')}">${escapeHtml(it.description) || '—'}</td>
+      <td class="px-3 py-2 whitespace-nowrap">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full shrink-0" style="background:${cat ? cat.color : '#94a3b8'}"></span>
+          ${escapeHtml(cat ? cat.label : '—')}
+        </span>
+      </td>
+      <td class="px-3 py-2 text-slate-400">${escapeHtml(qc ? qc.label : '—')}</td>
+      <td class="px-3 py-2 text-right font-semibold text-slate-700 whitespace-nowrap">${it.priceNoTax != null ? formatCOP(it.priceNoTax) : '—'}</td>
+      <td class="px-3 py-2">
+        <div class="flex items-center gap-1">
+          <button class="js-edit-item p-1.5 rounded text-slate-400 hover:text-sky-600 hover:bg-sky-50" title="Editar">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="js-delete-item p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50" title="Eliminar">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </td>
+    `;
+    tr.querySelector('.js-edit-item').addEventListener('click', () => openItemModal('edit', it.categoryId, it));
+    tr.querySelector('.js-delete-item').addEventListener('click', () => {
+      if (!confirm(`¿Eliminar "${it.name}" (${it.code}) del inventario? Esta acción no se puede deshacer.`)) return;
+      idbDeleteItem(it.id).then(() => {
+        delete CUSTOM_ITEMS_BY_ID[it.id];
+        renderInventoryTable();
+        if (it.categoryId === activeCat) renderInventory();
+        rebuildQuote();
+      });
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+populateInventoryTableCategoryFilter();
+document.getElementById('inventoryTableSearch').addEventListener('input', renderInventoryTable);
+document.getElementById('inventoryTableCategoryFilter').addEventListener('change', renderInventoryTable);
+document.querySelectorAll('.js-inv-sort').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (inventoryTableSort.key === key) {
+      inventoryTableSort.dir = inventoryTableSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      inventoryTableSort = { key, dir: 'asc' };
+    }
+    renderInventoryTable();
+  });
+});
 
 renderCatRail();
 renderInventory();
@@ -1728,17 +1884,20 @@ bindResizeHandle(document.getElementById('quotePanelResizeHandle'), quotePanel, 
    "Tablero Kanban" (asignación de tareas al equipo).
 --------------------------------------------------------- */
 const viewProductos = document.getElementById('viewProductos');
+const viewInventario = document.getElementById('viewInventario');
 const viewCotizaciones = document.getElementById('viewCotizaciones');
 const viewKanban = document.getElementById('viewKanban');
 const viewTablero3D = document.getElementById('viewTablero3D');
 const viewUsuarios = document.getElementById('viewUsuarios');
 const tabBtnProductos = document.getElementById('tabBtnProductos');
+const tabBtnInventario = document.getElementById('tabBtnInventario');
 const tabBtnCotizaciones = document.getElementById('tabBtnCotizaciones');
 const tabBtnKanban = document.getElementById('tabBtnKanban');
 const tabBtnTablero3D = document.getElementById('tabBtnTablero3D');
 const tabBtnUsuarios = document.getElementById('tabBtnUsuarios');
 const TAB_VIEWS = {
   productos: { view: viewProductos, btn: tabBtnProductos },
+  inventario: { view: viewInventario, btn: tabBtnInventario },
   cotizaciones: { view: viewCotizaciones, btn: tabBtnCotizaciones },
   kanban: { view: viewKanban, btn: tabBtnKanban },
   tablero3d: { view: viewTablero3D, btn: tabBtnTablero3D },
@@ -1754,6 +1913,7 @@ function setActiveTab(tab) {
     btn.classList.toggle('text-slate-400', !active);
   });
   if (tab === 'productos') requestAnimationFrame(resizeCanvas);
+  else if (tab === 'inventario') renderInventoryTable();
   else if (tab === 'cotizaciones') renderQuotesPanel();
   else if (tab === 'kanban') refreshKanbanData();
   else if (tab === 'tablero3d') requestAnimationFrame(activate3DRoom);
@@ -1768,6 +1928,7 @@ tabBtnProductos.addEventListener('click', () => {
   leftPanelCollapsed = alreadyOnProductos ? !leftPanelCollapsed : true;
   setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, leftPanelCollapsed);
 });
+tabBtnInventario.addEventListener('click', () => setActiveTab('inventario'));
 tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
 tabBtnKanban.addEventListener('click', () => setActiveTab('kanban'));
 tabBtnTablero3D.addEventListener('click', () => setActiveTab('tablero3d'));
@@ -3656,6 +3817,7 @@ itemForm.addEventListener('submit', (e) => {
       CUSTOM_ITEMS_BY_ID[record.id] = record;
       closeItemModal();
       if (itemModalCategoryId === activeCat) renderInventory();
+      renderInventoryTable();
       rebuildQuote();
     });
   };
