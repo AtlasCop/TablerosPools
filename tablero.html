@@ -2763,6 +2763,7 @@ let itemModalCategoryId = null;
 let itemModalEditingItem = null;
 let itemModalImageDataUrl = null;
 let itemModalConvertedFlag = false;
+let itemImageWasChanged = false;
 
 function openItemModal(mode, categoryId, existingItem) {
   itemModalMode = mode;
@@ -2770,6 +2771,7 @@ function openItemModal(mode, categoryId, existingItem) {
   itemModalEditingItem = existingItem;
   itemModalImageDataUrl = existingItem ? (existingItem.imageDataUrl || null) : null;
   itemModalConvertedFlag = false;
+  itemImageWasChanged = false;
   itemModalRawImageDataUrl = null;
   itemFormError.classList.add('hidden');
   hideBgStatusMessages();
@@ -2917,6 +2919,36 @@ function removeBackgroundAndCrop(dataUrl) {
   });
 }
 
+/* Segunda versión de la foto, pensada para el Tablero 3D: la misma
+   imagen (ya sin fondo y recortada por removeBackgroundAndCrop) pero
+   centrada sobre un lienzo cuadrado con fondo blanco — así se puede
+   usar como textura en las 6 caras de la caja 3D sin que se vea
+   estirada ni con bordes transparentes raros. Se guarda aparte
+   (`image3DDataUrl`) — el tablero 2D sigue usando la original
+   recortada tal cual, sin fondo.*/
+function makeSquare3DImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const SIZE = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = SIZE;
+      canvas.height = SIZE;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      const pad = SIZE * 0.1;
+      const maxDim = SIZE - pad * 2;
+      const scale = Math.min(maxDim / img.width, maxDim / img.height);
+      const w = img.width * scale, h = img.height * scale;
+      ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error('No se pudo preparar la imagen para el Tablero 3D'));
+    img.src = dataUrl;
+  });
+}
+
 const itemBgProcessingStatus = document.getElementById('itemBgProcessingStatus');
 const itemBgRemovedStatus = document.getElementById('itemBgRemovedStatus');
 const itemBgNotUniformStatus = document.getElementById('itemBgNotUniformStatus');
@@ -2938,6 +2970,7 @@ itemImageInput.addEventListener('change', () => {
     itemImageInput.value = '';
     return;
   }
+  itemImageWasChanged = true;
   const reader = new FileReader();
   reader.onload = () => {
     itemModalRawImageDataUrl = reader.result;
@@ -3025,7 +3058,21 @@ itemForm.addEventListener('submit', (e) => {
     record.imageDataUrl = itemModalImageDataUrl;
     record.quoteCategory = quoteCategory;
 
-    idbPutItem(record).then(() => {
+    // Solo se reprocesa la versión cuadrada para 3D si la foto cambió en
+    // este formulario, o si el objeto todavía no tenía una (por ejemplo,
+    // uno creado antes de que existiera esta función) — así una edición
+    // de precio/nombre sin tocar la imagen no reprocesa nada de más.
+    const needsImage3D = itemModalImageDataUrl && (itemImageWasChanged || !record.image3DDataUrl);
+    const image3DPromise = !itemModalImageDataUrl
+      ? Promise.resolve(null)
+      : needsImage3D
+        ? makeSquare3DImage(itemModalImageDataUrl).catch(() => null)
+        : Promise.resolve(record.image3DDataUrl);
+
+    image3DPromise.then(image3DDataUrl => {
+      record.image3DDataUrl = image3DDataUrl;
+      return idbPutItem(record);
+    }).then(() => {
       CUSTOM_ITEMS_BY_ID[record.id] = record;
       closeItemModal();
       if (itemModalCategoryId === activeCat) renderInventory();
@@ -3056,7 +3103,7 @@ itemForm.addEventListener('submit', (e) => {
 const EQUIP_BASE_SIZE = 0.4; // metros — caja genérica de 40cm antes de escalar
 
 let scene3D, camera3D, renderer3D, orbitControls3D, transformControls3D;
-let objectsGroup3D, roomGroup3D, raycaster3D, mouse3D;
+let objectsGroup3D, roomGroup3D, raycaster3D, mouse3D, textureLoader3D;
 let selected3DGroup = null;
 let room3DDims = { width: 4, depth: 3, height: 2.5 };
 let is3DInitialized = false;
@@ -3090,9 +3137,20 @@ function createEquipmentObject3D(item, savedTransform, overrideColor) {
   const cat = item.categoryId ? CATEGORY_BY_ID[item.categoryId] : null;
   const color = overrideColor || (cat && cat.color) || '#0ea5e9';
   const label = item.name || 'Equipo';
+  const image3D = item.image3DDataUrl || null;
 
   const geometry = new THREE.BoxGeometry(EQUIP_BASE_SIZE, EQUIP_BASE_SIZE, EQUIP_BASE_SIZE);
-  const material = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.05 });
+  // Si el objeto tiene foto (image3DDataUrl, generada al subir la imagen en
+  // el formulario), se usa como textura en las 6 caras de la caja en vez
+  // del color plano de la categoría — base blanca para no desteñir la foto.
+  const material = new THREE.MeshStandardMaterial({ color: image3D ? 0xffffff : color, roughness: 0.6, metalness: 0.05 });
+  if (image3D && textureLoader3D) {
+    textureLoader3D.load(image3D, (texture) => {
+      texture.encoding = THREE.sRGBEncoding;
+      material.map = texture;
+      material.needsUpdate = true;
+    });
+  }
   const box = new THREE.Mesh(geometry, material);
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(geometry),
@@ -3123,6 +3181,16 @@ function createEquipmentObject3D(item, savedTransform, overrideColor) {
   }
   objectsGroup3D.add(group);
   return group;
+}
+
+function dispose3DObject(root) {
+  root.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (o.material.map) o.material.map.dispose();
+      o.material.dispose();
+    }
+  });
 }
 
 function update3DSizeLabel() {
@@ -3233,10 +3301,7 @@ function load3DRoom() {
     if (selected3DGroup) deselect3DObject();
     [...objectsGroup3D.children].forEach(g => {
       objectsGroup3D.remove(g);
-      g.traverse(o => {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) o.material.dispose();
-      });
+      dispose3DObject(g);
     });
     if (data) {
       room3DDims = { width: Number(data.width) || 4, depth: Number(data.depth) || 3, height: Number(data.height) || 2.5 };
@@ -3283,8 +3348,11 @@ function init3DScene() {
 
   renderer3D = new THREE.WebGLRenderer({ antialias: true });
   renderer3D.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer3D.outputEncoding = THREE.sRGBEncoding;
   renderer3D.domElement.style.display = 'block';
   wrap.appendChild(renderer3D.domElement);
+
+  textureLoader3D = new THREE.TextureLoader();
 
   scene3D.add(new THREE.AmbientLight(0xffffff, 0.7));
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
@@ -3378,10 +3446,7 @@ document.getElementById('btn3DDeleteSelected').addEventListener('click', () => {
   if (!selected3DGroup) return;
   transformControls3D.detach();
   objectsGroup3D.remove(selected3DGroup);
-  selected3DGroup.traverse(o => {
-    if (o.geometry) o.geometry.dispose();
-    if (o.material) o.material.dispose();
-  });
+  dispose3DObject(selected3DGroup);
   selected3DGroup = null;
   document.getElementById('btn3DDeleteSelected').classList.add('hidden');
   document.getElementById('room3DSizeLabel').classList.add('hidden');
