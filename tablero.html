@@ -597,6 +597,18 @@
         </div>
       </div>
       <p id="kanbanTaskFormError" class="hidden text-xs text-red-500"></p>
+
+      <!-- COMENTARIOS DE ACTUALIZACIÓN — solo con la tarea ya guardada -->
+      <div id="kanbanTaskCommentsSection" class="hidden pt-3 border-t border-slate-200">
+        <label class="block text-xs font-medium text-slate-600 mb-2">Comentarios de actualización</label>
+        <div id="kanbanTaskCommentsList" class="space-y-2 max-h-40 overflow-y-auto mb-2"></div>
+        <div class="flex items-start gap-1.5">
+          <select id="kanbanCommentAuthor" class="text-xs border border-slate-200 rounded px-1.5 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white shrink-0 w-24"></select>
+          <input id="kanbanCommentText" type="text" placeholder="Escribe una actualización…" class="flex-1 min-w-0 text-xs border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+          <button type="button" id="kanbanCommentAddBtn" class="shrink-0 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Agregar</button>
+        </div>
+      </div>
+
       <div class="flex gap-2 pt-1">
         <button type="button" id="kanbanTaskDeleteBtn" class="hidden text-xs px-3 py-2 rounded border border-red-200 text-red-500 hover:bg-red-50">Eliminar</button>
         <button type="button" id="kanbanTaskModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
@@ -614,6 +626,16 @@
       <button id="kanbanMemberModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
     </div>
     <form id="kanbanMemberForm" class="space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Foto (opcional)</label>
+        <div class="flex items-center gap-3">
+          <div id="kanbanMemberPhotoPreviewWrap" class="w-14 h-14 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+            <img id="kanbanMemberPhotoPreview" class="hidden w-full h-full object-cover" />
+            <span id="kanbanMemberPhotoPlaceholder" class="text-[9px] text-slate-400 text-center px-1 leading-tight">Sin foto</span>
+          </div>
+          <input id="kanbanMemberPhotoInput" type="file" accept="image/*" class="text-xs flex-1" />
+        </div>
+      </div>
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">Nombre</label>
         <input id="kanbanMemberName" type="text" required class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Nombre del integrante" />
@@ -833,6 +855,15 @@ function sbSaveRoom3D(data) {
 }
 function sbLoadRoom3D() {
   return sb.from('room3d').select('*').eq('id', 'default').maybeSingle().then(sbResult);
+}
+function idbGetCommentsForTask(taskId) {
+  return sb.from('kanban_comments').select('*').eq('taskId', taskId).order('createdAt', { ascending: true }).then(sbResult);
+}
+function idbPutComment(comment) {
+  return sb.from('kanban_comments').upsert(comment).then(sbResult).then(() => comment);
+}
+function idbDeleteComment(id) {
+  return sb.from('kanban_comments').delete().eq('id', id).then(sbResult).then(() => {});
 }
 
 /* In-memory cache of every DB-backed custom item, keyed by id — loaded once
@@ -2012,6 +2043,16 @@ function kanbanInitials(name) {
   return (name || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 }
 function kanbanMemberById(id) { return KANBAN_MEMBERS.find(m => m.id === id) || null; }
+/* Círculo de foto real si la persona tiene una, si no las iniciales de
+   color de siempre — se usa en la barra de equipo, la tarjeta de tarea
+   y los comentarios, así todos se ven igual en toda la app. */
+function memberAvatarHtml(member, sizeClass) {
+  if (!member) return '';
+  if (member.photoDataUrl) {
+    return `<img src="${member.photoDataUrl}" class="${sizeClass} rounded-full object-cover shrink-0" title="${escapeHtml(member.name)}" />`;
+  }
+  return `<span class="${sizeClass} rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style="background:${member.color}" title="${escapeHtml(member.name)}">${escapeHtml(kanbanInitials(member.name))}</span>`;
+}
 function kanbanFormatDate(dateStr) {
   const parts = (dateStr || '').split('-');
   return parts.length === 3 ? `${parts[2]}/${parts[1]}` : '';
@@ -2041,7 +2082,7 @@ function renderKanbanMembersBar() {
     const chip = document.createElement('div');
     chip.className = 'group flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full border border-slate-200 bg-white';
     chip.innerHTML = `
-      <span class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style="background:${m.color}">${escapeHtml(kanbanInitials(m.name))}</span>
+      ${memberAvatarHtml(m, 'w-5 h-5')}
       <span class="text-xs text-slate-600">${escapeHtml(m.name)}</span>
       <button type="button" class="js-remove-member hidden group-hover:inline text-slate-300 hover:text-red-500 text-xs leading-none ml-0.5" title="Quitar del equipo">&times;</button>
     `;
@@ -2070,7 +2111,7 @@ function kanbanTaskCardEl(task) {
     <div class="flex items-center justify-between pt-1">
       <div class="flex items-center gap-1.5 min-w-0">
         ${member
-          ? `<span class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style="background:${member.color}" title="${escapeHtml(member.name)}">${escapeHtml(kanbanInitials(member.name))}</span><span class="text-[10px] text-slate-500 truncate">${escapeHtml(member.name)}</span>`
+          ? `${memberAvatarHtml(member, 'w-5 h-5')}<span class="text-[10px] text-slate-500 truncate">${escapeHtml(member.name)}</span>`
           : `<span class="text-[10px] text-slate-300 italic">Sin asignar</span>`}
       </div>
       ${task.dueDate ? `<span class="shrink-0 text-[9px] text-slate-400">${escapeHtml(kanbanFormatDate(task.dueDate))}</span>` : ''}
@@ -2167,6 +2208,15 @@ function openKanbanTaskModal(task) {
   document.getElementById('kanbanTaskPriority').value = task ? task.priority : 'media';
   document.getElementById('kanbanTaskDueDate').value = task ? (task.dueDate || '') : '';
   document.getElementById('kanbanTaskColumn').value = task ? task.column : 'todo';
+
+  const commentsSection = document.getElementById('kanbanTaskCommentsSection');
+  commentsSection.classList.toggle('hidden', !task);
+  if (task) {
+    document.getElementById('kanbanCommentText').value = '';
+    populateCommentAuthorSelect();
+    renderKanbanTaskComments(task.id);
+  }
+
   kanbanTaskModal.classList.remove('hidden');
 }
 document.getElementById('btnAddKanbanTask').addEventListener('click', () => openKanbanTaskModal(null));
@@ -2205,14 +2255,139 @@ document.getElementById('kanbanTaskForm').addEventListener('submit', (e) => {
 document.getElementById('kanbanTaskDeleteBtn').addEventListener('click', () => {
   if (!kanbanEditingTaskId) return;
   if (!confirm('¿Eliminar esta tarea?')) return;
-  idbDeleteTask(kanbanEditingTaskId).then(() => {
-    kanbanTaskModal.classList.add('hidden');
-    refreshKanbanData();
+  const taskId = kanbanEditingTaskId;
+  idbDeleteTask(taskId)
+    .then(() => idbGetCommentsForTask(taskId))
+    .then(comments => Promise.all(comments.map(c => idbDeleteComment(c.id))))
+    .then(() => {
+      kanbanTaskModal.classList.add('hidden');
+      refreshKanbanData();
+    });
+});
+
+/* ---------------------------------------------------------
+   COMENTARIOS DE ACTUALIZACIÓN — quedan con la foto (o iniciales)
+   de quien escribió, y la fecha/hora exacta. Solo se pueden agregar
+   sobre una tarea ya guardada (necesita su id); una tarea nueva sin
+   guardar todavía no tiene dónde colgarlos.
+--------------------------------------------------------- */
+let lastCommentAuthorId = null;
+
+function populateCommentAuthorSelect() {
+  const sel = document.getElementById('kanbanCommentAuthor');
+  sel.innerHTML = KANBAN_MEMBERS.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  if (KANBAN_MEMBERS.some(m => m.id === lastCommentAuthorId)) sel.value = lastCommentAuthorId;
+}
+
+function kanbanCommentDateStr(ts) {
+  return new Date(ts).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderKanbanTaskComments(taskId) {
+  const list = document.getElementById('kanbanTaskCommentsList');
+  list.innerHTML = '<p class="text-[11px] text-slate-300 italic">Cargando…</p>';
+  idbGetCommentsForTask(taskId).then(comments => {
+    list.innerHTML = '';
+    if (!comments.length) {
+      list.innerHTML = '<p class="text-[11px] text-slate-300 italic">Aún no hay comentarios.</p>';
+      return;
+    }
+    comments.forEach(c => {
+      const author = kanbanMemberById(c.authorId);
+      const row = document.createElement('div');
+      row.className = 'group flex items-start gap-2';
+      row.innerHTML = `
+        ${author ? memberAvatarHtml(author, 'w-6 h-6') : `<span class="w-6 h-6 rounded-full bg-slate-200 shrink-0"></span>`}
+        <div class="flex-1 min-w-0 bg-slate-50 rounded-lg px-2.5 py-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold text-slate-700 truncate">${escapeHtml(author ? author.name : 'Alguien del equipo')}</span>
+            <span class="text-[9px] text-slate-400 shrink-0">${kanbanCommentDateStr(c.createdAt)}</span>
+          </div>
+          <p class="text-[11px] text-slate-600 mt-0.5 break-words">${escapeHtml(c.text)}</p>
+        </div>
+        <button type="button" class="js-comment-delete hidden group-hover:inline text-slate-300 hover:text-red-500 text-xs leading-none shrink-0 mt-1" title="Eliminar comentario">&times;</button>
+      `;
+      row.querySelector('.js-comment-delete').addEventListener('click', () => {
+        idbDeleteComment(c.id).then(() => renderKanbanTaskComments(taskId));
+      });
+      list.appendChild(row);
+    });
+    list.scrollTop = list.scrollHeight;
   });
+}
+
+document.getElementById('kanbanCommentAddBtn').addEventListener('click', () => {
+  if (!kanbanEditingTaskId) return;
+  const authorId = document.getElementById('kanbanCommentAuthor').value;
+  const textInput = document.getElementById('kanbanCommentText');
+  const text = textInput.value.trim();
+  if (!authorId || !text) return;
+  const comment = {
+    id: 'comment_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    taskId: kanbanEditingTaskId,
+    authorId,
+    text,
+    createdAt: Date.now(),
+  };
+  lastCommentAuthorId = authorId;
+  idbPutComment(comment).then(() => {
+    textInput.value = '';
+    renderKanbanTaskComments(kanbanEditingTaskId);
+  });
+});
+document.getElementById('kanbanCommentText').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('kanbanCommentAddBtn').click(); }
 });
 
 /* Equipo de trabajo (personas asignables) */
 const kanbanMemberModal = document.getElementById('kanbanMemberModal');
+let kanbanMemberPhotoDataUrl = null;
+
+/* Recorta al cuadrado (centrado) y reduce el tamaño — la foto de perfil
+   no necesita quitar fondo como los objetos del inventario, solo quedar
+   cuadrada para que el círculo (rounded-full) se vea bien sin estirarse. */
+function makeSquareAvatarImage(dataUrl, size) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(img.width, img.height);
+      const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      canvas.getContext('2d').drawImage(img, sx, sy, s, s, 0, 0, size, size);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => reject(new Error('No se pudo procesar la foto'));
+    img.src = dataUrl;
+  });
+}
+
+function updateKanbanMemberPhotoPreview() {
+  const img = document.getElementById('kanbanMemberPhotoPreview');
+  const placeholder = document.getElementById('kanbanMemberPhotoPlaceholder');
+  if (kanbanMemberPhotoDataUrl) {
+    img.src = kanbanMemberPhotoDataUrl;
+    img.classList.remove('hidden');
+    placeholder.classList.add('hidden');
+  } else {
+    img.classList.add('hidden');
+    placeholder.classList.remove('hidden');
+  }
+}
+document.getElementById('kanbanMemberPhotoInput').addEventListener('change', () => {
+  const file = document.getElementById('kanbanMemberPhotoInput').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    makeSquareAvatarImage(reader.result, 200).then(squareDataUrl => {
+      kanbanMemberPhotoDataUrl = squareDataUrl;
+      updateKanbanMemberPhotoPreview();
+    });
+  };
+  reader.readAsDataURL(file);
+});
+
 function renderKanbanColorPicker() {
   const wrap = document.getElementById('kanbanMemberColorPicker');
   wrap.innerHTML = '';
@@ -2231,6 +2406,8 @@ document.getElementById('btnAddKanbanMember').addEventListener('click', () => {
   document.getElementById('kanbanMemberForm').reset();
   document.getElementById('kanbanMemberFormError').classList.add('hidden');
   kanbanSelectedColor = KANBAN_MEMBER_COLORS[KANBAN_MEMBERS.length % KANBAN_MEMBER_COLORS.length];
+  kanbanMemberPhotoDataUrl = null;
+  updateKanbanMemberPhotoPreview();
   renderKanbanColorPicker();
   kanbanMemberModal.classList.remove('hidden');
 });
@@ -2245,7 +2422,7 @@ document.getElementById('kanbanMemberForm').addEventListener('submit', (e) => {
   const errEl = document.getElementById('kanbanMemberFormError');
   if (!name) { errEl.textContent = 'Escribe un nombre.'; errEl.classList.remove('hidden'); return; }
   errEl.classList.add('hidden');
-  const member = { id: 'member_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, color: kanbanSelectedColor, phone };
+  const member = { id: 'member_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, color: kanbanSelectedColor, phone, photoDataUrl: kanbanMemberPhotoDataUrl };
   idbPutMember(member).then(() => {
     kanbanMemberModal.classList.add('hidden');
     refreshKanbanData();

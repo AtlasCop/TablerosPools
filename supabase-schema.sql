@@ -84,10 +84,24 @@ create table if not exists kanban_members (
   id text primary key,
   name text not null,
   color text,
-  phone text
+  phone text,
+  "photoDataUrl" text
 );
 -- Por si la tabla ya existía de una corrida anterior de este script:
 alter table kanban_members add column if not exists phone text;
+alter table kanban_members add column if not exists "photoDataUrl" text;
+
+-- Comentarios de actualización de cada tarea del Kanban (una fila por
+-- comentario, no un arreglo dentro de la tarea, para que dos personas
+-- comentando casi al tiempo no se pisen el trabajo entre sí)
+create table if not exists kanban_comments (
+  id text primary key,
+  "taskId" text not null,
+  "authorId" text,
+  text text not null,
+  "createdAt" bigint
+);
+create index if not exists kanban_comments_task_idx on kanban_comments ("taskId");
 
 -- Tablero 3D: una sola "sala" compartida por todo el equipo (medidas
 -- reales del cuarto de máquinas + los equipos colocados en ella).
@@ -114,6 +128,7 @@ alter table quotes enable row level security;
 alter table kanban_tasks enable row level security;
 alter table kanban_members enable row level security;
 alter table room3d enable row level security;
+alter table kanban_comments enable row level security;
 
 drop policy if exists "allow all - items" on items;
 create policy "allow all - items" on items for all to anon, authenticated using (true) with check (true);
@@ -132,3 +147,6 @@ create policy "allow all - kanban_members" on kanban_members for all to anon, au
 
 drop policy if exists "allow all - room3d" on room3d;
 create policy "allow all - room3d" on room3d for all to anon, authenticated using (true) with check (true);
+
+drop policy if exists "allow all - kanban_comments" on kanban_comments;
+create policy "allow all - kanban_comments" on kanban_comments for all to anon, authenticated using (true) with check (true);
