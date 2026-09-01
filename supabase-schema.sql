@@ -85,11 +85,13 @@ create table if not exists kanban_members (
   name text not null,
   color text,
   phone text,
-  "photoDataUrl" text
+  "photoDataUrl" text,
+  role text
 );
 -- Por si la tabla ya existía de una corrida anterior de este script:
 alter table kanban_members add column if not exists phone text;
 alter table kanban_members add column if not exists "photoDataUrl" text;
+alter table kanban_members add column if not exists role text;
 
 -- Comentarios de actualización de cada tarea del Kanban (una fila por
 -- comentario, no un arreglo dentro de la tarea, para que dos personas
