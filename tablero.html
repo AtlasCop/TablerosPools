@@ -219,6 +219,9 @@
       </div>
     </aside>
 
+    <!-- LEFT PANEL RESIZE HANDLE -->
+    <div id="invPanelResizeHandle" title="Arrastra para ensanchar/angostar" class="shrink-0 w-1.5 cursor-col-resize bg-slate-100 hover:bg-sky-300 transition-colors"></div>
+
     <!-- LEFT PANEL COLLAPSE ARROW -->
     <button id="leftPanelToggle" title="Ocultar/mostrar panel de equipos" class="shrink-0 w-4 bg-slate-100 hover:bg-sky-100 border-r border-slate-200 flex items-center justify-center">
       <svg id="leftPanelToggleIcon" class="w-3 h-3 text-slate-400 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -256,6 +259,9 @@
     <button id="quotePanelToggleArrow" title="Ocultar/mostrar cotización" class="shrink-0 w-4 bg-slate-100 hover:bg-sky-100 border-l border-slate-200 flex items-center justify-center">
       <svg id="quotePanelToggleArrowIcon" class="w-3 h-3 text-slate-400 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
+
+    <!-- QUOTE PANEL RESIZE HANDLE -->
+    <div id="quotePanelResizeHandle" title="Arrastra para ensanchar/angostar" class="shrink-0 w-1.5 cursor-col-resize bg-slate-100 hover:bg-sky-300 transition-colors"></div>
 
     <!-- QUOTE / SHOPPING-CART PANEL -->
     <aside id="quotePanel" class="w-72 shrink-0 bg-white border-l border-slate-200 flex flex-col overflow-hidden">
@@ -1351,14 +1357,76 @@ function setPanelCollapsed(panelEls, iconEl, collapsed) {
       el.style.overflow = 'hidden';
       el.style.borderWidth = '0px';
     } else {
-      el.style.width = '';
-      el.style.minWidth = '';
+      // Si el panel se había ensanchado/angostado a mano, volver a ese
+      // ancho en vez de al de Tailwind por defecto (ver bindResizeHandle).
+      const customWidth = el.dataset.customWidth;
+      el.style.width = customWidth ? customWidth + 'px' : '';
+      el.style.minWidth = customWidth ? customWidth + 'px' : '';
       el.style.overflow = '';
       el.style.borderWidth = '';
     }
   });
   iconEl.classList.toggle('rotate-180', collapsed);
   resizeCanvas();
+}
+
+/* ---------------------------------------------------------
+   PANELES/COLUMNAS REDIMENSIONABLES — una barrita delgada entre dos
+   elementos que, al arrastrarla, cambia el ancho (en px) del panel o
+   columna vecina. El ancho elegido se recuerda por navegador
+   (localStorage) para que sobreviva a recargas y a colapsar/expandir.
+--------------------------------------------------------- */
+const PANEL_WIDTHS_KEY = 'tablero_panel_widths';
+function loadPanelWidths() {
+  try { return JSON.parse(localStorage.getItem(PANEL_WIDTHS_KEY)) || {}; } catch { return {}; }
+}
+function savePanelWidth(key, px) {
+  const widths = loadPanelWidths();
+  widths[key] = px;
+  localStorage.setItem(PANEL_WIDTHS_KEY, JSON.stringify(widths));
+}
+function applyStoredWidth(el, key, fallbackMin, fallbackMax) {
+  const widths = loadPanelWidths();
+  const px = widths[key];
+  if (px == null) return;
+  const clamped = Math.max(fallbackMin, Math.min(fallbackMax, px));
+  el.dataset.customWidth = clamped;
+  el.style.width = clamped + 'px';
+  el.style.minWidth = clamped + 'px';
+}
+/* sign = +1 si el panel está a la IZQUIERDA de la barrita (arrastrar a
+   la derecha lo ensancha), -1 si está a la DERECHA (arrastrar a la
+   izquierda lo ensancha). onResize(px) es opcional, para cosas como
+   guardar el ancho por columna del Kanban con su propia llave. */
+function bindResizeHandle(handleEl, targetEl, { min = 180, max = 560, sign = 1, storageKey = null, onResize = null } = {}) {
+  handleEl.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = targetEl.getBoundingClientRect().width;
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    function onMove(ev) {
+      const delta = ev.clientX - startX;
+      const newWidth = Math.max(min, Math.min(max, Math.round(startWidth + sign * delta)));
+      targetEl.style.width = newWidth + 'px';
+      targetEl.style.minWidth = newWidth + 'px';
+      targetEl.dataset.customWidth = newWidth;
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+      const finalWidth = targetEl.getBoundingClientRect().width;
+      if (storageKey) savePanelWidth(storageKey, Math.round(finalWidth));
+      if (onResize) onResize(Math.round(finalWidth));
+      resizeCanvas();
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 }
 
 let leftPanelCollapsed = false;
@@ -1369,6 +1437,8 @@ document.getElementById('leftPanelToggle').addEventListener('click', () => {
   leftPanelCollapsed = !leftPanelCollapsed;
   setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, leftPanelCollapsed);
 });
+applyStoredWidth(invPanelEl, 'invPanel', 180, 520);
+bindResizeHandle(document.getElementById('invPanelResizeHandle'), invPanelEl, { min: 180, max: 520, sign: 1, storageKey: 'invPanel' });
 
 let quotePanelCollapsed = false;
 const quotePanel = document.getElementById('quotePanel');
@@ -1381,6 +1451,8 @@ function toggleQuotePanel() {
 }
 document.getElementById('quotePanelToggleArrow').addEventListener('click', toggleQuotePanel);
 btnQuoteToggle.addEventListener('click', toggleQuotePanel);
+applyStoredWidth(quotePanel, 'quotePanel', 220, 620);
+bindResizeHandle(document.getElementById('quotePanelResizeHandle'), quotePanel, { min: 220, max: 620, sign: -1, storageKey: 'quotePanel' });
 
 /* ---------------------------------------------------------
    PESTAÑAS DE VISTA: "Productos" (todo el flujo de armar el
@@ -1931,7 +2003,7 @@ function renderKanbanBoard() {
   KANBAN_COLUMNS.forEach(col => {
     const tasks = KANBAN_TASKS.filter(t => t.column === col.id).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     const colEl = document.createElement('div');
-    colEl.className = 'w-72 shrink-0 flex flex-col bg-slate-100 rounded-xl overflow-hidden';
+    colEl.className = 'relative w-72 shrink-0 flex flex-col bg-slate-100 rounded-xl overflow-hidden';
     colEl.innerHTML = `
       <div class="px-3 py-2.5 flex items-center gap-2 border-b border-slate-200 shrink-0">
         <span class="w-2 h-2 rounded-full ${col.dot}"></span>
@@ -1939,7 +2011,10 @@ function renderKanbanBoard() {
         <span class="ml-auto text-[10px] text-slate-400 font-semibold">${tasks.length}</span>
       </div>
       <div class="js-kanban-dropzone flex-1 overflow-y-auto p-2.5 space-y-2 min-h-[80px]"></div>
+      <div class="js-kanban-col-resize absolute top-0 right-0 -mr-2 w-3 h-full cursor-col-resize" title="Arrastra para ensanchar/angostar"></div>
     `;
+    applyStoredWidth(colEl, 'kanbanCol_' + col.id, 220, 480);
+    bindResizeHandle(colEl.querySelector('.js-kanban-col-resize'), colEl, { min: 220, max: 480, sign: 1, storageKey: 'kanbanCol_' + col.id });
     const dropzone = colEl.querySelector('.js-kanban-dropzone');
     if (!tasks.length) {
       const empty = document.createElement('p');
