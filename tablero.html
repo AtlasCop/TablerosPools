@@ -639,9 +639,8 @@
 <!-- ITEM (INVENTORY) MODAL -->
 <div id="itemModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-full">
-    <div class="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+    <div class="px-5 pt-5 pb-3 shrink-0">
       <h3 id="itemModalTitle" class="text-sm font-bold text-slate-800">Agregar objeto</h3>
-      <button id="itemModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
     </div>
     <form id="itemForm" class="px-5 pb-5 space-y-3 overflow-y-auto">
       <div>
@@ -3828,10 +3827,10 @@ itemConvertPngBtn.addEventListener('click', () => {
   img.src = itemModalImageDataUrl;
 });
 
-document.getElementById('itemModalClose').addEventListener('click', closeItemModal);
+// A propósito: este modal SOLO se cierra con "Cancelar" o "Guardar" — nada
+// de botón ×, clic afuera, ni tecla Escape, para que no se pierda sin
+// querer lo que se lleva escrito (se prestó a confusiones antes).
 document.getElementById('itemModalCancel').addEventListener('click', closeItemModal);
-itemModal.addEventListener('click', (e) => { if (e.target === itemModal) closeItemModal(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !itemModal.classList.contains('hidden')) closeItemModal(); });
 
 itemForm.addEventListener('submit', (e) => {
   e.preventDefault();
