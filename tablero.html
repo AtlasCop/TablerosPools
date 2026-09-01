@@ -853,7 +853,7 @@ QUOTE_CATEGORIES.forEach(qc => { QUOTE_CATEGORY_BY_ID[qc.id] = qc; });
    (el usuario puede cambiarlo por objeto al agregarlo/editarlo).
 --------------------------------------------------------- */
 const CATALOG = [
-  { id: 'motobombas', label: 'Motobombas', color: '#2563eb', code: 'MB', quoteCategory: 'sist-filtracion', items: [
+  { id: 'motobombas', label: 'Motobombas', color: '#2563eb', code: 'MB', quoteCategory: 'sist-filtracion', icon: 'assets/motobombas-icon.png', items: [
       { id: 'bomba-centrifuga', name: 'Bomba centrífuga', shape: 'pump' },
   ]},
   { id: 'filtracion', label: 'Filtración', color: '#0891b2', code: 'FIL', quoteCategory: 'sist-filtracion', items: [
@@ -1372,7 +1372,9 @@ function renderCatRail() {
   CATALOG.forEach(cat => {
     const btn = document.createElement('button');
     btn.className = 'cat-btn flex flex-col items-center justify-center gap-1 py-3 text-[10px] sm:text-[11px] font-medium hover:bg-white/10 border-l-3 border-transparent' + (cat.id === activeCat ? ' active' : '');
-    btn.innerHTML = `<span class="w-6 h-6 rounded-md" style="background:${cat.color}"></span><span>${cat.label}</span>`;
+    btn.innerHTML = cat.icon
+      ? `<span class="w-7 h-7 rounded-md bg-white/90 flex items-center justify-center p-1"><img src="${cat.icon}" alt="" class="w-full h-full object-contain" /></span><span>${cat.label}</span>`
+      : `<span class="w-6 h-6 rounded-md" style="background:${cat.color}"></span><span>${cat.label}</span>`;
     btn.addEventListener('click', () => { activeCat = cat.id; renderCatRail(); renderInventory(); });
     catRail.appendChild(btn);
   });
