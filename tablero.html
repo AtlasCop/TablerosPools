@@ -16,6 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   html, body { height: 100%; margin: 0; overflow: hidden; }
   #boardWrap { touch-action: none; }
@@ -666,160 +667,65 @@ const CATEGORY_BY_ID = {};
 CATALOG.forEach(cat => { CATEGORY_BY_ID[cat.id] = cat; });
 
 /* ---------------------------------------------------------
-   BASE DE DATOS (IndexedDB) — inventario real que el usuario
-   agrega por categoría: imagen, código consecutivo, sublínea,
-   descripción comercial y valor de venta sin IVA. Vive en este
-   navegador (igual que "Guardar"/localStorage en el resto de la
-   app) — no hay backend ni servidor propio.
+   BASE DE DATOS (Supabase / Postgres en la nube) — inventario,
+   cotizaciones y tablero Kanban, compartidos entre todo el equipo y
+   cualquier computador (antes vivían solo en IndexedDB de este
+   navegador). La "anon/publishable key" es segura para exponer en el
+   navegador: el acceso real lo controlan las políticas RLS creadas
+   en Supabase, no el secreto de la clave. Los nombres de las
+   funciones idb* se mantienen igual que antes (misma firma, misma
+   forma de Promise) para no tocar el resto de la app.
 --------------------------------------------------------- */
-const DB_NAME = 'tablero_piscinas_inventario';
-const DB_VERSION = 3;
-let dbPromise = null;
-function openDB() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('items')) {
-        const store = db.createObjectStore('items', { keyPath: 'id' });
-        store.createIndex('categoryId', 'categoryId', { unique: false });
-      }
-      if (!db.objectStoreNames.contains('counters')) {
-        db.createObjectStore('counters', { keyPath: 'categoryId' });
-      }
-      if (!db.objectStoreNames.contains('quotes')) {
-        db.createObjectStore('quotes', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('kanban_tasks')) {
-        db.createObjectStore('kanban_tasks', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('kanban_members')) {
-        db.createObjectStore('kanban_members', { keyPath: 'id' });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  return dbPromise;
+const SUPABASE_URL = 'https://cpoqtkeuwphligteyqkb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_dGajkUOgELahDEV_s4zM3A_i6WFYrEc';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+function sbResult({ data, error }) {
+  if (error) { console.error('Supabase error:', error); throw error; }
+  return data;
 }
+
 function idbGetItemsForCategory(categoryId) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('items', 'readonly');
-    const req = tx.objectStore('items').index('categoryId').getAll(IDBKeyRange.only(categoryId));
-    req.onsuccess = () => resolve(req.result.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)));
-    req.onerror = () => reject(req.error);
-  }));
+  return sb.from('items').select('*').eq('categoryId', categoryId).order('createdAt', { ascending: true }).then(sbResult);
 }
 function idbPutItem(item) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('items', 'readwrite');
-    tx.objectStore('items').put(item);
-    tx.oncomplete = () => resolve(item);
-    tx.onerror = () => reject(tx.error);
-  }));
+  return sb.from('items').upsert(item).then(sbResult).then(() => item);
 }
 function idbDeleteItem(id) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('items', 'readwrite');
-    tx.objectStore('items').delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  }));
+  return sb.from('items').delete().eq('id', id).then(sbResult).then(() => {});
 }
 function idbNextCode(categoryId, prefix) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('counters', 'readwrite');
-    const store = tx.objectStore('counters');
-    const getReq = store.get(categoryId);
-    getReq.onsuccess = () => {
-      const next = (getReq.result ? getReq.result.last : 0) + 1;
-      store.put({ categoryId, last: next });
-      tx.oncomplete = () => resolve(`${prefix}-${String(next).padStart(4, '0')}`);
-      tx.onerror = () => reject(tx.error);
-    };
-    getReq.onerror = () => reject(getReq.error);
-  }));
+  return sb.rpc('next_code', { p_category_id: categoryId, p_prefix: prefix }).then(sbResult);
 }
 function idbGetAllItems() {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('items', 'readonly');
-    const req = tx.objectStore('items').getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }));
+  return sb.from('items').select('*').then(sbResult);
 }
 function idbPutQuote(quote) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('quotes', 'readwrite');
-    tx.objectStore('quotes').put(quote);
-    tx.oncomplete = () => resolve(quote);
-    tx.onerror = () => reject(tx.error);
-  }));
+  return sb.from('quotes').upsert(quote).then(sbResult).then(() => quote);
 }
 function idbGetAllQuotes() {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('quotes', 'readonly');
-    const req = tx.objectStore('quotes').getAll();
-    req.onsuccess = () => resolve(req.result.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-    req.onerror = () => reject(req.error);
-  }));
+  return sb.from('quotes').select('*').order('createdAt', { ascending: false }).then(sbResult);
 }
 function idbDeleteQuote(id) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('quotes', 'readwrite');
-    tx.objectStore('quotes').delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  }));
+  return sb.from('quotes').delete().eq('id', id).then(sbResult).then(() => {});
 }
 function idbPutTask(task) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('kanban_tasks', 'readwrite');
-    tx.objectStore('kanban_tasks').put(task);
-    tx.oncomplete = () => resolve(task);
-    tx.onerror = () => reject(tx.error);
-  }));
+  return sb.from('kanban_tasks').upsert(task).then(sbResult).then(() => task);
 }
 function idbGetAllTasks() {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('kanban_tasks', 'readonly');
-    const req = tx.objectStore('kanban_tasks').getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }));
+  return sb.from('kanban_tasks').select('*').then(sbResult);
 }
 function idbDeleteTask(id) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('kanban_tasks', 'readwrite');
-    tx.objectStore('kanban_tasks').delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  }));
+  return sb.from('kanban_tasks').delete().eq('id', id).then(sbResult).then(() => {});
 }
 function idbPutMember(member) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('kanban_members', 'readwrite');
-    tx.objectStore('kanban_members').put(member);
-    tx.oncomplete = () => resolve(member);
-    tx.onerror = () => reject(tx.error);
-  }));
+  return sb.from('kanban_members').upsert(member).then(sbResult).then(() => member);
 }
 function idbGetAllMembers() {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('kanban_members', 'readonly');
-    const req = tx.objectStore('kanban_members').getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }));
+  return sb.from('kanban_members').select('*').then(sbResult);
 }
 function idbDeleteMember(id) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('kanban_members', 'readwrite');
-    tx.objectStore('kanban_members').delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  }));
+  return sb.from('kanban_members').delete().eq('id', id).then(sbResult).then(() => {});
 }
 
 /* In-memory cache of every DB-backed custom item, keyed by id — loaded once
