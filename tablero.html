@@ -3513,6 +3513,14 @@ function setItemQuoteCategoryValue(id) {
   itemQuoteCategorySelect.value = id || '';
   itemQuoteCategorySearchInput.value = qc ? qc.label : '';
 }
+/* Igual que setItemQuoteCategoryValue pero sin llenar el campo de texto —
+   se usa solo al abrir el formulario, para que quede vacío y listo para
+   escribir de una vez, aunque por dentro ya haya una categoría sugerida
+   (la que se guarda si el usuario no toca este campo para nada). */
+function setItemQuoteCategoryValueSilently(id) {
+  itemQuoteCategorySelect.value = id || '';
+  itemQuoteCategorySearchInput.value = '';
+}
 
 function renderItemQuoteCategoryList(query) {
   const q = (query || '').trim().toLowerCase();
@@ -3580,11 +3588,11 @@ function openItemModal(mode, categoryId, existingItem) {
     itemSublineInput.value = existingItem.subline || '';
     itemDescriptionInput.value = existingItem.description || '';
     itemPriceInput.value = existingItem.priceNoTax != null ? existingItem.priceNoTax : '';
-    setItemQuoteCategoryValue(existingItem.quoteCategory || cat.quoteCategory);
+    setItemQuoteCategoryValueSilently(existingItem.quoteCategory || cat.quoteCategory);
   } else {
     itemModalTitle.textContent = 'Agregar objeto';
     itemCodeDisplay.value = '';
-    setItemQuoteCategoryValue(cat.quoteCategory);
+    setItemQuoteCategoryValueSilently(cat.quoteCategory);
   }
   updateItemImagePreview();
   itemModal.classList.remove('hidden');
