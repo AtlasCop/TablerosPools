@@ -538,6 +538,62 @@
   </div>
 </div>
 
+<!-- EDITAR COTIZACIÓN YA GUARDADA (Panel Cotizaciones) -->
+<div id="quoteEditModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-full max-h-[92vh] flex flex-col overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
+      <h3 class="text-sm font-bold text-slate-800">Editar cotización</h3>
+      <button id="quoteEditModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-5 space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nombre del cliente</label>
+          <input id="quoteEditClientName" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Empresa</label>
+          <input id="quoteEditClientCompany" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Teléfono / WhatsApp</label>
+          <input id="quoteEditClientPhone" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Correo</label>
+          <input id="quoteEditClientEmail" type="email" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Proyecto / Ciudad</label>
+          <input id="quoteEditClientProject" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Responsable</label>
+          <select id="quoteEditOwnerSelect" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white"></select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Nota personalizada</label>
+        <textarea id="quoteEditClientNote" rows="2" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400"></textarea>
+      </div>
+
+      <div class="pt-2 border-t border-slate-200">
+        <label class="block text-xs font-medium text-slate-600 mb-2">Ítems de la cotización</label>
+        <div id="quoteEditItemsWrap" class="space-y-3"></div>
+        <p id="quoteEditItemsEmpty" class="hidden text-xs text-slate-400 italic py-4 text-center">Esta cotización no tiene ítems — elimínala y genera una nueva desde el tablero si hace falta.</p>
+      </div>
+    </div>
+    <div class="border-t border-slate-200 px-5 py-3 bg-slate-50 flex items-center justify-between shrink-0">
+      <span class="text-xs font-bold text-slate-600 uppercase">Total general</span>
+      <span id="quoteEditGrandTotal" class="text-sm font-bold text-slate-800">$0</span>
+    </div>
+    <div class="px-5 pb-4 pt-1 flex gap-2 shrink-0">
+      <button type="button" id="quoteEditCancelBtn" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
+      <button type="button" id="quoteEditSaveBtn" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
 <!-- ITEM (INVENTORY) MODAL -->
 <div id="itemModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-full">
@@ -2038,6 +2094,9 @@ function renderQuotesPanel() {
         <div class="text-xs text-slate-400 w-24 text-center shrink-0">${itemCount} ítem${itemCount === 1 ? '' : 's'}</div>
         <div class="text-sm font-bold text-slate-700 w-28 text-right shrink-0">${formatCOP(q.grandTotal)}</div>
         <div class="js-quote-status-group flex items-center gap-1.5 shrink-0"></div>
+        <button class="js-quote-edit p-1.5 rounded text-slate-300 hover:text-sky-600 hover:bg-sky-50 shrink-0" title="Editar cotización">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button class="js-quote-delete p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 shrink-0" title="Eliminar cotización">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -2083,6 +2142,7 @@ function renderQuotesPanel() {
         }
       }
 
+      card.querySelector('.js-quote-edit').addEventListener('click', () => openQuoteEditModal(q));
       card.querySelector('.js-quote-delete').addEventListener('click', () => {
         if (!confirm('¿Eliminar esta cotización del historial?')) return;
         idbDeleteQuote(q.id).then(renderQuotesPanel);
@@ -2091,6 +2151,144 @@ function renderQuotesPanel() {
     });
   });
 }
+
+/* ---------------------------------------------------------
+   EDITAR UNA COTIZACIÓN YA GUARDADA — a diferencia de "Generar
+   cotización" (que lee el tablero 2D en vivo), esto edita directamente
+   la foto (snapshot) guardada: datos del cliente, responsable, y las
+   cantidades/ítems de cada categoría (se puede quitar un ítem o ajustar
+   su cantidad; no se pueden agregar ítems nuevos aquí — para eso hay
+   que volver al tablero y generar de nuevo). El estado (Pendiente/
+   Autorizada/Facturada) no se toca desde este modal, se deja como
+   estaba — para eso están los botones de la tarjeta.
+--------------------------------------------------------- */
+let quoteEditingId = null;
+let quoteEditingStatus = null;
+let quoteEditingCreatedAt = null;
+let quoteEditingCategories = [];
+let quoteEditOwnerCandidates = [];
+const quoteEditModal = document.getElementById('quoteEditModal');
+
+function populateQuoteEditOwnerSelect(currentOwnerId) {
+  const sel = document.getElementById('quoteEditOwnerSelect');
+  return idbGetAllMembers().then(members => {
+    quoteEditOwnerCandidates = members;
+    sel.innerHTML = '<option value="">Sin asignar</option>' +
+      members.map(m => `<option value="${m.id}">${escapeHtml(m.name)}${m.phone ? '' : ' (sin teléfono)'}</option>`).join('');
+    if (currentOwnerId && members.some(m => m.id === currentOwnerId)) sel.value = currentOwnerId;
+  });
+}
+
+function renderQuoteEditItems() {
+  const wrap = document.getElementById('quoteEditItemsWrap');
+  wrap.innerHTML = '';
+  let grandTotal = 0;
+
+  quoteEditingCategories.forEach((cat) => {
+    cat.subtotal = cat.items.reduce((s, it) => s + it.total, 0);
+    grandTotal += cat.subtotal;
+    if (!cat.items.length) return; // categoría se quedó sin ítems, no se muestra
+
+    const block = document.createElement('div');
+    block.className = 'rounded-lg overflow-hidden border border-slate-200';
+    block.innerHTML = `<div class="bg-slate-600 text-white text-[10px] font-bold uppercase px-3 py-1.5">${escapeHtml(cat.label)}</div>`;
+    const rowsWrap = document.createElement('div');
+    rowsWrap.className = 'divide-y divide-slate-100';
+
+    cat.items.forEach((it, itemIdx) => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2 px-3 py-2';
+      row.innerHTML = `
+        <div class="flex-1 min-w-0">
+          <div class="text-xs text-slate-700 truncate">${escapeHtml(it.name)}</div>
+          <div class="text-[10px] text-slate-400">${escapeHtml(it.code)} · ${formatCOP(it.unit)} c/u</div>
+        </div>
+        <input type="number" min="1" step="1" value="${it.qty}" class="js-edit-qty w-14 text-center text-xs border border-slate-200 rounded px-1 py-1 outline-none focus:ring-1 focus:ring-sky-400" />
+        <span class="w-20 text-right text-xs font-semibold text-slate-700">${formatCOP(it.total)}</span>
+        <button type="button" class="js-edit-remove text-slate-300 hover:text-red-500 text-sm leading-none px-1" title="Quitar ítem">&times;</button>
+      `;
+      row.querySelector('.js-edit-qty').addEventListener('change', (e) => {
+        const n = Math.max(1, Math.round(Number(e.target.value)) || 1);
+        it.qty = n;
+        it.total = it.unit * n;
+        renderQuoteEditItems();
+      });
+      row.querySelector('.js-edit-remove').addEventListener('click', () => {
+        cat.items.splice(itemIdx, 1);
+        renderQuoteEditItems();
+      });
+      rowsWrap.appendChild(row);
+    });
+    block.appendChild(rowsWrap);
+
+    const subtotalRow = document.createElement('div');
+    subtotalRow.className = 'bg-slate-50 text-[11px] font-bold text-slate-600 px-3 py-1.5 flex items-center justify-between';
+    subtotalRow.innerHTML = `<span>Subtotal</span><span>${formatCOP(cat.subtotal)}</span>`;
+    block.appendChild(subtotalRow);
+    wrap.appendChild(block);
+  });
+
+  // Se quitan del arreglo las categorías que se quedaron sin ítems.
+  quoteEditingCategories = quoteEditingCategories.filter(cat => cat.items.length);
+
+  document.getElementById('quoteEditItemsEmpty').classList.toggle('hidden', quoteEditingCategories.length > 0);
+  document.getElementById('quoteEditGrandTotal').textContent = formatCOP(grandTotal);
+}
+
+function openQuoteEditModal(q) {
+  quoteEditingId = q.id;
+  quoteEditingStatus = q.status;
+  quoteEditingCreatedAt = q.createdAt;
+  quoteEditingCategories = JSON.parse(JSON.stringify(q.categories || []));
+
+  document.getElementById('quoteEditClientName').value = q.clientName || '';
+  document.getElementById('quoteEditClientCompany').value = q.clientCompany || '';
+  document.getElementById('quoteEditClientPhone').value = q.clientPhone || '';
+  document.getElementById('quoteEditClientEmail').value = q.clientEmail || '';
+  document.getElementById('quoteEditClientProject').value = q.clientProject || '';
+  document.getElementById('quoteEditClientNote').value = q.clientNote || '';
+
+  populateQuoteEditOwnerSelect(q.ownerId);
+  renderQuoteEditItems();
+  quoteEditModal.classList.remove('hidden');
+}
+
+document.getElementById('quoteEditModalClose').addEventListener('click', () => quoteEditModal.classList.add('hidden'));
+document.getElementById('quoteEditCancelBtn').addEventListener('click', () => quoteEditModal.classList.add('hidden'));
+quoteEditModal.addEventListener('click', (e) => { if (e.target === quoteEditModal) quoteEditModal.classList.add('hidden'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !quoteEditModal.classList.contains('hidden')) quoteEditModal.classList.add('hidden'); });
+
+document.getElementById('quoteEditSaveBtn').addEventListener('click', function() {
+  const ownerId = document.getElementById('quoteEditOwnerSelect').value || null;
+  const owner = ownerId ? quoteEditOwnerCandidates.find(m => m.id === ownerId) : null;
+  const grandTotal = quoteEditingCategories.reduce((s, c) => s + c.subtotal, 0);
+
+  // "boardName" se deja fuera a propósito — no se edita aquí, y al no
+  // mandarlo, el upsert conserva el valor que ya tenía guardado.
+  const updated = {
+    id: quoteEditingId,
+    createdAt: quoteEditingCreatedAt,
+    clientName: document.getElementById('quoteEditClientName').value.trim(),
+    clientCompany: document.getElementById('quoteEditClientCompany').value.trim(),
+    clientPhone: document.getElementById('quoteEditClientPhone').value.trim(),
+    clientEmail: document.getElementById('quoteEditClientEmail').value.trim(),
+    clientProject: document.getElementById('quoteEditClientProject').value.trim(),
+    clientNote: document.getElementById('quoteEditClientNote').value.trim(),
+    categories: quoteEditingCategories,
+    grandTotal,
+    status: quoteEditingStatus,
+    ownerId,
+    ownerName: owner ? owner.name : null,
+    ownerPhone: owner ? (owner.phone || null) : null,
+  };
+
+  withBusyButton(this, 'Guardando…', () =>
+    idbPutQuote(updated).then(() => {
+      quoteEditModal.classList.add('hidden');
+      renderQuotesPanel();
+    })
+  );
+});
 
 document.getElementById('btnQuoteDocDownloadPdf').addEventListener('click', function() {
   withBusyButton(this, 'Generando…', () => generateQuotePdf().then(pdf => {
