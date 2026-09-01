@@ -1869,6 +1869,10 @@ function populateQuoteOwnerSelect() {
   });
 }
 document.getElementById('btnGenerateQuoteDoc').addEventListener('click', () => {
+  // Nueva sesión de generación: el próximo Descargar/Correo/WhatsApp crea
+  // una cotización nueva; mientras el modal siga abierto, todos reusan esa misma.
+  activeQuoteId = null;
+  activeQuoteCreatedAt = null;
   quoteDocModal.classList.remove('hidden');
   populateQuoteOwnerSelect();
   renderQuoteDocPreview();
@@ -1922,6 +1926,13 @@ function withBusyButton(btn, busyLabel, fn) {
    que tenía en ese momento (cliente, categorías, ítems, total) junto
    con un estado editable: pendiente / autorizada / facturada.
 --------------------------------------------------------- */
+/* Mientras el modal de cotización siga abierto, Descargar/Correo/WhatsApp
+   deben actualizar la MISMA cotización guardada, no crear una nueva cada
+   vez que se le da a un botón distinto — activeQuoteId/activeQuoteCreatedAt
+   se reinician solo al abrir el modal de nuevo (ver btnGenerateQuoteDoc). */
+let activeQuoteId = null;
+let activeQuoteCreatedAt = null;
+
 function currentQuoteSnapshot() {
   const clientName = document.getElementById('quoteClientName').value.trim();
   const clientCompany = document.getElementById('quoteClientCompany').value.trim();
@@ -1950,13 +1961,21 @@ function currentQuoteSnapshot() {
   const ownerId = document.getElementById('quoteOwnerSelect').value || null;
   const owner = ownerId ? quoteOwnerCandidates.find(m => m.id === ownerId) : null;
 
+  if (!activeQuoteId) {
+    activeQuoteId = 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    activeQuoteCreatedAt = Date.now();
+  }
+
   return {
-    id: 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-    createdAt: Date.now(),
+    id: activeQuoteId,
+    createdAt: activeQuoteCreatedAt,
     boardName: document.getElementById('boardName').value.trim() || 'Proyecto sin título',
     clientName, clientCompany, clientPhone, clientEmail, clientProject, clientNote,
     categories, grandTotal,
-    status: 'pendiente',
+    // "status" se deja fuera a propósito: en un insert nuevo toma el default
+    // 'pendiente' de la tabla, y en una actualización (mismo id, otro botón
+    // de envío dentro de la misma sesión) no se toca — así no se pisa un
+    // cambio de estado que ya se haya hecho en Panel Cotizaciones.
     ownerId,
     ownerName: owner ? owner.name : null,
     ownerPhone: owner ? (owner.phone || null) : null,
