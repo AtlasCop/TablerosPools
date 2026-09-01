@@ -176,6 +176,7 @@
   <div class="h-10 shrink-0 bg-white border-b border-slate-200 flex items-center gap-1 px-4">
     <button id="tabBtnProductos" class="text-xs font-semibold px-4 py-2 border-b-2 border-sky-500 text-sky-600 transition-colors">Productos</button>
     <button id="tabBtnCotizaciones" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Panel Cotizaciones</button>
+    <button id="tabBtnKanban" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero Kanban</button>
   </div>
 
   <!-- MAIN -->
@@ -290,6 +291,30 @@
         Aún no se ha generado ninguna cotización. Ve a la pestaña "Productos", arma el tablero y genera una cotización para verla aquí.
       </div>
     </div>
+  </div>
+
+  <!-- KANBAN BOARD (asignación de tareas al equipo) -->
+  <div id="viewKanban" class="hidden flex-1 flex flex-col min-h-0 bg-slate-50">
+    <div class="px-6 pt-5 pb-3 border-b border-slate-200 bg-white shrink-0">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 class="text-sm font-bold text-slate-700">Tablero Kanban de tareas</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5 max-w-md">Arrastra cada tarjeta entre columnas para actualizar su estado. Asigna cada tarea a un integrante del equipo para saber quién es responsable.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btnAddKanbanMember" class="text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M17 8h5M19.5 5.5v5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Agregar persona
+          </button>
+          <button id="btnAddKanbanTask" class="text-xs font-semibold px-3 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            Nueva tarea
+          </button>
+        </div>
+      </div>
+      <div id="kanbanMembersBar" class="flex items-center gap-2 flex-wrap mt-3"></div>
+    </div>
+    <div id="kanbanColumnsWrap" class="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4"></div>
   </div>
 </div>
 
@@ -438,6 +463,77 @@
   </div>
 </div>
 
+<!-- KANBAN TASK MODAL -->
+<div id="kanbanTaskModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-full">
+    <div class="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+      <h3 id="kanbanTaskModalTitle" class="text-sm font-bold text-slate-800">Nueva tarea</h3>
+      <button id="kanbanTaskModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    </div>
+    <form id="kanbanTaskForm" class="px-5 pb-5 space-y-3 overflow-y-auto">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Título</label>
+        <input id="kanbanTaskTitle" type="text" required class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Ej. Cotizar filtro para cliente X" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Descripción (opcional)</label>
+        <textarea id="kanbanTaskDescription" rows="3" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Detalles de la tarea…"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Asignar a</label>
+          <select id="kanbanTaskAssignee" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Prioridad</label>
+          <select id="kanbanTaskPriority" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white"></select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Fecha límite (opcional)</label>
+          <input id="kanbanTaskDueDate" type="date" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Columna</label>
+          <select id="kanbanTaskColumn" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white"></select>
+        </div>
+      </div>
+      <p id="kanbanTaskFormError" class="hidden text-xs text-red-500"></p>
+      <div class="flex gap-2 pt-1">
+        <button type="button" id="kanbanTaskDeleteBtn" class="hidden text-xs px-3 py-2 rounded border border-red-200 text-red-500 hover:bg-red-50">Eliminar</button>
+        <button type="button" id="kanbanTaskModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
+        <button type="submit" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- KANBAN MEMBER (EQUIPO) MODAL -->
+<div id="kanbanMemberModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-bold text-slate-800">Agregar persona al equipo</h3>
+      <button id="kanbanMemberModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    </div>
+    <form id="kanbanMemberForm" class="space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Nombre</label>
+        <input id="kanbanMemberName" type="text" required class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Nombre del integrante" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Color</label>
+        <div id="kanbanMemberColorPicker" class="flex items-center gap-2 flex-wrap"></div>
+      </div>
+      <p id="kanbanMemberFormError" class="hidden text-xs text-red-500"></p>
+      <div class="flex gap-2 pt-1">
+        <button type="button" id="kanbanMemberModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
+        <button type="submit" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 /* ---------------------------------------------------------
    CATEGORÍAS DE LA COTIZACIÓN (panel derecho, tipo "canasta")
@@ -577,7 +673,7 @@ CATALOG.forEach(cat => { CATEGORY_BY_ID[cat.id] = cat; });
    app) — no hay backend ni servidor propio.
 --------------------------------------------------------- */
 const DB_NAME = 'tablero_piscinas_inventario';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 let dbPromise = null;
 function openDB() {
   if (dbPromise) return dbPromise;
@@ -594,6 +690,12 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('quotes')) {
         db.createObjectStore('quotes', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('kanban_tasks')) {
+        db.createObjectStore('kanban_tasks', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('kanban_members')) {
+        db.createObjectStore('kanban_members', { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -667,6 +769,54 @@ function idbDeleteQuote(id) {
   return openDB().then(db => new Promise((resolve, reject) => {
     const tx = db.transaction('quotes', 'readwrite');
     tx.objectStore('quotes').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+function idbPutTask(task) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('kanban_tasks', 'readwrite');
+    tx.objectStore('kanban_tasks').put(task);
+    tx.oncomplete = () => resolve(task);
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+function idbGetAllTasks() {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('kanban_tasks', 'readonly');
+    const req = tx.objectStore('kanban_tasks').getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }));
+}
+function idbDeleteTask(id) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('kanban_tasks', 'readwrite');
+    tx.objectStore('kanban_tasks').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+function idbPutMember(member) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('kanban_members', 'readwrite');
+    tx.objectStore('kanban_members').put(member);
+    tx.oncomplete = () => resolve(member);
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+function idbGetAllMembers() {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('kanban_members', 'readonly');
+    const req = tx.objectStore('kanban_members').getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }));
+}
+function idbDeleteMember(id) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('kanban_members', 'readwrite');
+    tx.objectStore('kanban_members').delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   }));
@@ -1315,25 +1465,33 @@ btnQuoteToggle.addEventListener('click', toggleQuotePanel);
 
 /* ---------------------------------------------------------
    PESTAÑAS DE VISTA: "Productos" (todo el flujo de armar el
-   tablero — categorías, tablero, cotización en vivo) vs "Panel
-   Cotizaciones" (historial de cotizaciones ya generadas).
+   tablero — categorías, tablero, cotización en vivo), "Panel
+   Cotizaciones" (historial de cotizaciones ya generadas) y
+   "Tablero Kanban" (asignación de tareas al equipo).
 --------------------------------------------------------- */
 const viewProductos = document.getElementById('viewProductos');
 const viewCotizaciones = document.getElementById('viewCotizaciones');
+const viewKanban = document.getElementById('viewKanban');
 const tabBtnProductos = document.getElementById('tabBtnProductos');
 const tabBtnCotizaciones = document.getElementById('tabBtnCotizaciones');
+const tabBtnKanban = document.getElementById('tabBtnKanban');
+const TAB_VIEWS = {
+  productos: { view: viewProductos, btn: tabBtnProductos },
+  cotizaciones: { view: viewCotizaciones, btn: tabBtnCotizaciones },
+  kanban: { view: viewKanban, btn: tabBtnKanban },
+};
 function setActiveTab(tab) {
-  const isProductos = tab === 'productos';
-  viewProductos.classList.toggle('hidden', !isProductos);
-  viewCotizaciones.classList.toggle('hidden', isProductos);
-  [ [tabBtnProductos, isProductos], [tabBtnCotizaciones, !isProductos] ].forEach(([btn, active]) => {
+  Object.entries(TAB_VIEWS).forEach(([key, { view, btn }]) => {
+    const active = key === tab;
+    view.classList.toggle('hidden', !active);
     btn.classList.toggle('border-sky-500', active);
     btn.classList.toggle('text-sky-600', active);
     btn.classList.toggle('border-transparent', !active);
     btn.classList.toggle('text-slate-400', !active);
   });
-  if (isProductos) requestAnimationFrame(resizeCanvas);
-  else renderQuotesPanel();
+  if (tab === 'productos') requestAnimationFrame(resizeCanvas);
+  else if (tab === 'cotizaciones') renderQuotesPanel();
+  else if (tab === 'kanban') refreshKanbanData();
 }
 tabBtnProductos.addEventListener('click', () => {
   const alreadyOnProductos = !viewProductos.classList.contains('hidden');
@@ -1345,6 +1503,7 @@ tabBtnProductos.addEventListener('click', () => {
   setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, leftPanelCollapsed);
 });
 tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
+tabBtnKanban.addEventListener('click', () => setActiveTab('kanban'));
 
 /* ---------------------------------------------------------
    DOCUMENTO DE COTIZACIÓN — versión elegante para el cliente:
@@ -1663,6 +1822,275 @@ document.getElementById('btnQuoteDocWhatsapp').addEventListener('click', functio
     const msg = encodeURIComponent(`${greeting(clientName)}, te comparto la cotización de tu proyecto de piscina/spa 🌊 (adjunto el PDF en este chat, se acaba de descargar en tu computador).`);
     window.open(`https://wa.me/${withCountry}?text=${msg}`, '_blank');
   }));
+});
+
+/* ---------------------------------------------------------
+   TABLERO KANBAN — asignación de tareas al equipo de trabajo.
+   Cuatro columnas fijas y didácticas (Por hacer / En progreso / En
+   revisión / Hecho), tarjetas arrastrables entre columnas (drag and
+   drop nativo del navegador) y un equipo de personas a las que se
+   les puede asignar cada tarea. Vive en dos stores nuevos de la
+   misma IndexedDB del inventario (kanban_tasks, kanban_members) —
+   se releen en cada render, sin caché en memoria, porque el volumen
+   de datos es pequeño y así siempre se ve el estado real.
+--------------------------------------------------------- */
+const KANBAN_COLUMNS = [
+  { id: 'todo', label: 'Por hacer', dot: 'bg-slate-400' },
+  { id: 'inprogress', label: 'En progreso', dot: 'bg-sky-400' },
+  { id: 'review', label: 'En revisión', dot: 'bg-amber-400' },
+  { id: 'done', label: 'Hecho', dot: 'bg-emerald-400' },
+];
+const KANBAN_PRIORITIES = [
+  { id: 'baja', label: 'Baja', badge: 'bg-slate-100 text-slate-500' },
+  { id: 'media', label: 'Media', badge: 'bg-amber-100 text-amber-700' },
+  { id: 'alta', label: 'Alta', badge: 'bg-red-100 text-red-700' },
+];
+const KANBAN_MEMBER_COLORS = ['#0ea5e9', '#f97316', '#10b981', '#8b5cf6', '#ec4899', '#eab308', '#ef4444', '#14b8a6', '#6366f1', '#84cc16'];
+
+let KANBAN_TASKS = [];
+let KANBAN_MEMBERS = [];
+let kanbanEditingTaskId = null;
+let kanbanDraggedTaskId = null;
+let kanbanSelectedColor = KANBAN_MEMBER_COLORS[0];
+
+function kanbanInitials(name) {
+  return (name || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+}
+function kanbanMemberById(id) { return KANBAN_MEMBERS.find(m => m.id === id) || null; }
+function kanbanFormatDate(dateStr) {
+  const parts = (dateStr || '').split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}` : '';
+}
+
+function refreshKanbanData() {
+  return Promise.all([idbGetAllTasks(), idbGetAllMembers()]).then(([tasks, members]) => {
+    KANBAN_TASKS = tasks;
+    KANBAN_MEMBERS = members;
+    renderKanbanMembersBar();
+    renderKanbanBoard();
+    populateKanbanTaskFormSelects();
+  });
+}
+
+function renderKanbanMembersBar() {
+  const bar = document.getElementById('kanbanMembersBar');
+  bar.innerHTML = '';
+  if (!KANBAN_MEMBERS.length) {
+    const hint = document.createElement('span');
+    hint.className = 'text-[11px] text-slate-400 italic';
+    hint.textContent = 'Aún no hay personas en el equipo — agrega una para poder asignarle tareas.';
+    bar.appendChild(hint);
+    return;
+  }
+  KANBAN_MEMBERS.forEach(m => {
+    const chip = document.createElement('div');
+    chip.className = 'group flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full border border-slate-200 bg-white';
+    chip.innerHTML = `
+      <span class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style="background:${m.color}">${escapeHtml(kanbanInitials(m.name))}</span>
+      <span class="text-xs text-slate-600">${escapeHtml(m.name)}</span>
+      <button type="button" class="js-remove-member hidden group-hover:inline text-slate-300 hover:text-red-500 text-xs leading-none ml-0.5" title="Quitar del equipo">&times;</button>
+    `;
+    chip.querySelector('.js-remove-member').addEventListener('click', () => {
+      if (!confirm(`¿Quitar a ${m.name} del equipo? Sus tareas asignadas quedarán sin responsable.`)) return;
+      idbDeleteMember(m.id).then(refreshKanbanData);
+    });
+    bar.appendChild(chip);
+  });
+}
+
+function kanbanTaskCardEl(task) {
+  const card = document.createElement('div');
+  card.className = 'bg-white rounded-lg border border-slate-200 shadow-sm p-3 space-y-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow';
+  card.draggable = true;
+
+  const priority = KANBAN_PRIORITIES.find(p => p.id === task.priority) || KANBAN_PRIORITIES[1];
+  const member = task.assigneeId ? kanbanMemberById(task.assigneeId) : null;
+
+  card.innerHTML = `
+    <div class="flex items-start justify-between gap-2">
+      <p class="text-xs font-semibold text-slate-700 leading-snug">${escapeHtml(task.title)}</p>
+      <span class="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${priority.badge}">${priority.label}</span>
+    </div>
+    ${task.description ? `<p class="text-[11px] text-slate-400 leading-snug line-clamp-3">${escapeHtml(task.description)}</p>` : ''}
+    <div class="flex items-center justify-between pt-1">
+      <div class="flex items-center gap-1.5 min-w-0">
+        ${member
+          ? `<span class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style="background:${member.color}" title="${escapeHtml(member.name)}">${escapeHtml(kanbanInitials(member.name))}</span><span class="text-[10px] text-slate-500 truncate">${escapeHtml(member.name)}</span>`
+          : `<span class="text-[10px] text-slate-300 italic">Sin asignar</span>`}
+      </div>
+      ${task.dueDate ? `<span class="shrink-0 text-[9px] text-slate-400">${escapeHtml(kanbanFormatDate(task.dueDate))}</span>` : ''}
+    </div>
+  `;
+
+  card.addEventListener('click', () => openKanbanTaskModal(task));
+  card.addEventListener('dragstart', (e) => {
+    kanbanDraggedTaskId = task.id;
+    e.dataTransfer.effectAllowed = 'move';
+    requestAnimationFrame(() => card.classList.add('opacity-40'));
+  });
+  card.addEventListener('dragend', () => {
+    kanbanDraggedTaskId = null;
+    card.classList.remove('opacity-40');
+  });
+  return card;
+}
+
+function renderKanbanBoard() {
+  const wrap = document.getElementById('kanbanColumnsWrap');
+  wrap.innerHTML = '';
+  KANBAN_COLUMNS.forEach(col => {
+    const tasks = KANBAN_TASKS.filter(t => t.column === col.id).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    const colEl = document.createElement('div');
+    colEl.className = 'w-72 shrink-0 flex flex-col bg-slate-100 rounded-xl overflow-hidden';
+    colEl.innerHTML = `
+      <div class="px-3 py-2.5 flex items-center gap-2 border-b border-slate-200 shrink-0">
+        <span class="w-2 h-2 rounded-full ${col.dot}"></span>
+        <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">${col.label}</span>
+        <span class="ml-auto text-[10px] text-slate-400 font-semibold">${tasks.length}</span>
+      </div>
+      <div class="js-kanban-dropzone flex-1 overflow-y-auto p-2.5 space-y-2 min-h-[80px]"></div>
+    `;
+    const dropzone = colEl.querySelector('.js-kanban-dropzone');
+    if (!tasks.length) {
+      const empty = document.createElement('p');
+      empty.className = 'text-[11px] text-slate-300 italic text-center py-4';
+      empty.textContent = 'Sin tareas';
+      dropzone.appendChild(empty);
+    }
+    tasks.forEach(t => dropzone.appendChild(kanbanTaskCardEl(t)));
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      dropzone.classList.add('ring-2', 'ring-inset', 'ring-sky-300');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('ring-2', 'ring-inset', 'ring-sky-300'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('ring-2', 'ring-inset', 'ring-sky-300');
+      if (!kanbanDraggedTaskId) return;
+      const task = KANBAN_TASKS.find(t => t.id === kanbanDraggedTaskId);
+      if (!task || task.column === col.id) return;
+      task.column = col.id;
+      idbPutTask(task).then(refreshKanbanData);
+    });
+
+    wrap.appendChild(colEl);
+  });
+}
+
+function populateKanbanTaskFormSelects() {
+  const assigneeSel = document.getElementById('kanbanTaskAssignee');
+  const currentAssignee = assigneeSel.value;
+  assigneeSel.innerHTML = '<option value="">Sin asignar</option>' +
+    KANBAN_MEMBERS.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  if (KANBAN_MEMBERS.some(m => m.id === currentAssignee)) assigneeSel.value = currentAssignee;
+
+  const prioritySel = document.getElementById('kanbanTaskPriority');
+  if (!prioritySel.options.length) {
+    prioritySel.innerHTML = KANBAN_PRIORITIES.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
+  }
+  const columnSel = document.getElementById('kanbanTaskColumn');
+  if (!columnSel.options.length) {
+    columnSel.innerHTML = KANBAN_COLUMNS.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+  }
+}
+
+const kanbanTaskModal = document.getElementById('kanbanTaskModal');
+function openKanbanTaskModal(task) {
+  kanbanEditingTaskId = task ? task.id : null;
+  document.getElementById('kanbanTaskModalTitle').textContent = task ? 'Editar tarea' : 'Nueva tarea';
+  document.getElementById('kanbanTaskDeleteBtn').classList.toggle('hidden', !task);
+  document.getElementById('kanbanTaskFormError').classList.add('hidden');
+  populateKanbanTaskFormSelects();
+  document.getElementById('kanbanTaskTitle').value = task ? task.title : '';
+  document.getElementById('kanbanTaskDescription').value = task ? (task.description || '') : '';
+  document.getElementById('kanbanTaskAssignee').value = task ? (task.assigneeId || '') : '';
+  document.getElementById('kanbanTaskPriority').value = task ? task.priority : 'media';
+  document.getElementById('kanbanTaskDueDate').value = task ? (task.dueDate || '') : '';
+  document.getElementById('kanbanTaskColumn').value = task ? task.column : 'todo';
+  kanbanTaskModal.classList.remove('hidden');
+}
+document.getElementById('btnAddKanbanTask').addEventListener('click', () => openKanbanTaskModal(null));
+document.getElementById('kanbanTaskModalClose').addEventListener('click', () => kanbanTaskModal.classList.add('hidden'));
+document.getElementById('kanbanTaskModalCancel').addEventListener('click', () => kanbanTaskModal.classList.add('hidden'));
+kanbanTaskModal.addEventListener('click', (e) => { if (e.target === kanbanTaskModal) kanbanTaskModal.classList.add('hidden'); });
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!kanbanTaskModal.classList.contains('hidden')) kanbanTaskModal.classList.add('hidden');
+  if (!kanbanMemberModal.classList.contains('hidden')) kanbanMemberModal.classList.add('hidden');
+});
+
+document.getElementById('kanbanTaskForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const title = document.getElementById('kanbanTaskTitle').value.trim();
+  const errEl = document.getElementById('kanbanTaskFormError');
+  if (!title) { errEl.textContent = 'Escribe un título para la tarea.'; errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+  const existing = kanbanEditingTaskId ? KANBAN_TASKS.find(t => t.id === kanbanEditingTaskId) : null;
+  const task = {
+    id: existing ? existing.id : 'task_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    title,
+    description: document.getElementById('kanbanTaskDescription').value.trim(),
+    assigneeId: document.getElementById('kanbanTaskAssignee').value || null,
+    priority: document.getElementById('kanbanTaskPriority').value,
+    dueDate: document.getElementById('kanbanTaskDueDate').value,
+    column: document.getElementById('kanbanTaskColumn').value,
+    createdAt: existing ? existing.createdAt : Date.now(),
+  };
+  idbPutTask(task).then(() => {
+    kanbanTaskModal.classList.add('hidden');
+    refreshKanbanData();
+  });
+});
+
+document.getElementById('kanbanTaskDeleteBtn').addEventListener('click', () => {
+  if (!kanbanEditingTaskId) return;
+  if (!confirm('¿Eliminar esta tarea?')) return;
+  idbDeleteTask(kanbanEditingTaskId).then(() => {
+    kanbanTaskModal.classList.add('hidden');
+    refreshKanbanData();
+  });
+});
+
+/* Equipo de trabajo (personas asignables) */
+const kanbanMemberModal = document.getElementById('kanbanMemberModal');
+function renderKanbanColorPicker() {
+  const wrap = document.getElementById('kanbanMemberColorPicker');
+  wrap.innerHTML = '';
+  KANBAN_MEMBER_COLORS.forEach(color => {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'w-6 h-6 rounded-full border-2 transition-transform';
+    swatch.style.background = color;
+    swatch.style.borderColor = color === kanbanSelectedColor ? '#0f172a' : 'transparent';
+    swatch.style.transform = color === kanbanSelectedColor ? 'scale(1.15)' : 'scale(1)';
+    swatch.addEventListener('click', () => { kanbanSelectedColor = color; renderKanbanColorPicker(); });
+    wrap.appendChild(swatch);
+  });
+}
+document.getElementById('btnAddKanbanMember').addEventListener('click', () => {
+  document.getElementById('kanbanMemberForm').reset();
+  document.getElementById('kanbanMemberFormError').classList.add('hidden');
+  kanbanSelectedColor = KANBAN_MEMBER_COLORS[KANBAN_MEMBERS.length % KANBAN_MEMBER_COLORS.length];
+  renderKanbanColorPicker();
+  kanbanMemberModal.classList.remove('hidden');
+});
+document.getElementById('kanbanMemberModalClose').addEventListener('click', () => kanbanMemberModal.classList.add('hidden'));
+document.getElementById('kanbanMemberModalCancel').addEventListener('click', () => kanbanMemberModal.classList.add('hidden'));
+kanbanMemberModal.addEventListener('click', (e) => { if (e.target === kanbanMemberModal) kanbanMemberModal.classList.add('hidden'); });
+
+document.getElementById('kanbanMemberForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = document.getElementById('kanbanMemberName').value.trim();
+  const errEl = document.getElementById('kanbanMemberFormError');
+  if (!name) { errEl.textContent = 'Escribe un nombre.'; errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+  const member = { id: 'member_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, color: kanbanSelectedColor };
+  idbPutMember(member).then(() => {
+    kanbanMemberModal.classList.add('hidden');
+    refreshKanbanData();
+  });
 });
 
 /* ---------------------------------------------------------
