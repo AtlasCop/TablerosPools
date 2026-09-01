@@ -4,13 +4,6 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Aqua Bruma — Tablero de Equipos</title>
-<script>
-(function() {
-  var authed = sessionStorage.getItem('tablero_session') === 'active';
-  var hasShareLink = location.hash.indexOf('s=') !== -1;
-  if (!authed && !hasShareLink) location.replace('index.html');
-})();
-</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
@@ -51,9 +44,41 @@
     background: #0ea5e9; border: 2px solid #fff;
     box-shadow: 0 1px 3px rgba(0,0,0,0.35); cursor: pointer;
   }
+
+  /* Permisos por rol: se aplica una clase role-consulta/role-editor/role-admin
+     en <body> una vez se confirma la sesión (ver requireAuthAndRole()). Estas
+     reglas ocultan controles de crear/editar/eliminar para "consulta" en todo
+     salvo cotizaciones (donde sí puede crear/interactuar, solo no eliminar) —
+     la seguridad real la hacen cumplir las políticas RLS en Supabase, esto es
+     solo para que la pantalla no muestre botones que de todas formas fallarían. */
+  body.role-consulta #btnAddItem,
+  body.role-consulta .js-edit-item,
+  body.role-consulta .js-delete-item,
+  body.role-consulta #btnAddKanbanMember,
+  body.role-consulta #btnAddKanbanTask,
+  body.role-consulta .js-remove-member,
+  body.role-consulta .js-comment-delete,
+  body.role-consulta .js-write-only,
+  body.role-consulta #btn3DAddEquip,
+  body.role-consulta #btn3DApplyRoom,
+  body.role-consulta .js-3d-mode-btn,
+  body.role-consulta .js-quote-delete {
+    display: none !important;
+  }
+  body:not(.role-admin) #tabBtnUsuarios {
+    display: none !important;
+  }
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
+
+<!-- Tapa toda la página hasta confirmar que hay sesión y que la cuenta
+     está aprobada — ver requireAuthAndRole(). Evita el parpadeo de ver
+     la app un instante antes de que la mande a index.html si no debía
+     estar aquí. -->
+<div id="authGate" class="fixed inset-0 z-[10000] bg-slate-900 text-white flex items-center justify-center text-sm">
+  Verificando acceso…
+</div>
 
 <div class="h-screen w-screen flex flex-col">
 
@@ -132,25 +157,24 @@
     <button id="btnDeleteBoard" title="Eliminar el tablero seleccionado en la lista" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-red-400 disabled:opacity-30 disabled:pointer-events-none" disabled>
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <button id="btnNew" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600">Nuevo</button>
+    <button id="btnNew" title="Nuevo tablero" class="p-2 rounded bg-slate-700 hover:bg-slate-600">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 12h6M12 9v6" stroke-linecap="round"/></svg>
+    </button>
     <input id="fileImportInput" type="file" accept=".json,application/json" class="hidden" />
-    <button id="btnOpenFile" title="Abrir un tablero guardado como archivo .json" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 flex items-center gap-1.5">
-      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <button id="btnOpenFile" title="Abrir un tablero guardado como archivo .json" class="p-2 rounded bg-slate-700 hover:bg-slate-600">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke-linejoin="round"/>
       </svg>
-      Abrir archivo
     </button>
-    <button id="btnShare" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 flex items-center gap-1.5">
-      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <button id="btnShare" title="Compartir" class="p-2 rounded bg-slate-700 hover:bg-slate-600">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
         <line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/>
       </svg>
-      Compartir
     </button>
     <div class="relative">
-      <button id="btnExportMenu" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 flex items-center gap-1.5">
-        Exportar
-        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <button id="btnExportMenu" title="Exportar" class="p-2 rounded bg-slate-700 hover:bg-slate-600">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div id="exportMenu" class="hidden absolute right-0 mt-1 w-40 bg-white text-slate-700 rounded-lg shadow-xl border border-slate-200 overflow-hidden z-40">
         <button id="btnExportPNG" class="w-full text-left text-xs px-3 py-2 hover:bg-slate-100 flex items-center gap-2">
@@ -163,25 +187,28 @@
         </button>
       </div>
     </div>
-    <button id="btnSaveFile" title="Descargar este tablero como archivo .json para guardarlo en tu computador" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 flex items-center gap-1.5">
-      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <button id="btnSaveFile" title="Descargar este tablero como archivo .json para guardarlo en tu computador" class="p-2 rounded bg-slate-700 hover:bg-slate-600">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      Guardar archivo
     </button>
-    <button id="btnSave" class="text-xs px-3 py-1.5 rounded bg-sky-500 hover:bg-sky-400 font-medium">Guardar</button>
+    <button id="btnSave" title="Guardar tablero" class="p-2 rounded bg-sky-500 hover:bg-sky-400">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <div class="w-px h-6 bg-slate-700 mx-1"></div>
+    <span id="currentUserLabel" title="" class="text-[10px] font-semibold text-slate-300 bg-slate-800 rounded-full px-2 py-1 max-w-[6rem] truncate"></span>
     <button id="btnLogout" title="Cerrar sesión" class="p-2 rounded hover:bg-slate-800 text-slate-300 hover:text-white">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </header>
 
   <!-- VIEW TABS -->
-  <div class="h-10 shrink-0 bg-white border-b border-slate-200 flex items-center gap-1 px-4">
+  <div class="h-10 shrink-0 bg-white border-b border-slate-200 flex items-center gap-1 px-4 overflow-x-auto">
     <button id="tabBtnProductos" class="text-xs font-semibold px-4 py-2 border-b-2 border-sky-500 text-sky-600 transition-colors">Productos</button>
     <button id="tabBtnCotizaciones" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Panel Cotizaciones</button>
     <button id="tabBtnKanban" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero Kanban</button>
     <button id="tabBtnTablero3D" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero 3D</button>
+    <button id="tabBtnUsuarios" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Usuarios</button>
   </div>
 
   <!-- MAIN -->
@@ -389,6 +416,22 @@
         Agrega un equipo para empezar a planear el cuarto de máquinas en 3D.
       </div>
       <div id="room3DSizeLabel" class="hidden absolute top-2 left-2 bg-slate-900/80 text-white text-[11px] rounded px-2 py-1 pointer-events-none z-10"></div>
+    </div>
+  </div>
+
+  <!-- USUARIOS (solo administradores) -->
+  <div id="viewUsuarios" class="hidden flex-1 overflow-y-auto bg-slate-50 p-6">
+    <div class="max-w-3xl mx-auto space-y-6">
+      <div>
+        <h2 class="text-sm font-bold text-slate-700 mb-1">Solicitudes pendientes</h2>
+        <p class="text-[11px] text-slate-400 mb-3">Personas que se registraron y esperan que apruebes su acceso y les asignes un rol.</p>
+        <div id="usersPendingList" class="space-y-2"></div>
+      </div>
+      <div>
+        <h2 class="text-sm font-bold text-slate-700 mb-1">Usuarios con acceso</h2>
+        <p class="text-[11px] text-slate-400 mb-3">Cambia el rol de cualquiera o quítale el acceso.</p>
+        <div id="usersApprovedList" class="space-y-2"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -602,7 +645,7 @@
       <div id="kanbanTaskCommentsSection" class="hidden pt-3 border-t border-slate-200">
         <label class="block text-xs font-medium text-slate-600 mb-2">Comentarios de actualización</label>
         <div id="kanbanTaskCommentsList" class="space-y-2 max-h-40 overflow-y-auto mb-2"></div>
-        <div class="flex items-start gap-1.5">
+        <div class="js-write-only flex items-start gap-1.5">
           <select id="kanbanCommentAuthor" class="text-xs border border-slate-200 rounded px-1.5 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white shrink-0 w-24"></select>
           <input id="kanbanCommentText" type="text" placeholder="Escribe una actualización…" class="flex-1 min-w-0 text-xs border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
           <button type="button" id="kanbanCommentAddBtn" class="shrink-0 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Agregar</button>
@@ -610,9 +653,9 @@
       </div>
 
       <div class="flex gap-2 pt-1">
-        <button type="button" id="kanbanTaskDeleteBtn" class="hidden text-xs px-3 py-2 rounded border border-red-200 text-red-500 hover:bg-red-50">Eliminar</button>
+        <button type="button" id="kanbanTaskDeleteBtn" class="js-write-only hidden text-xs px-3 py-2 rounded border border-red-200 text-red-500 hover:bg-red-50">Eliminar</button>
         <button type="button" id="kanbanTaskModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
-        <button type="submit" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Guardar</button>
+        <button type="submit" class="js-write-only flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Guardar</button>
       </div>
     </form>
   </div>
@@ -812,6 +855,45 @@ function sbResult({ data, error }) {
   return data;
 }
 
+/* ---------------------------------------------------------
+   SESIÓN REAL Y ROLES — reemplaza el login local de antes. Nadie ve
+   la app hasta que se confirma que hay una cuenta con sesión Y que
+   su perfil está aprobado; #authGate tapa todo mientras tanto. El
+   rol (consulta/editor/admin) queda en CURRENT_ROLE y se refleja en
+   body.role-xxx para que el CSS oculte los controles de escritura
+   que no le correspondan — la seguridad real la hacen cumplir las
+   políticas RLS en Supabase, esto es solo para no mostrar botones
+   que de todas formas fallarían.
+--------------------------------------------------------- */
+const ROLE_LABELS = { consulta: 'Consulta', editor: 'Editor', admin: 'Administrador' };
+let CURRENT_USER = null;
+let CURRENT_PROFILE = null;
+let CURRENT_ROLE = null;
+
+function requireAuthAndRole() {
+  return sb.auth.getUser().then(({ data }) => {
+    const user = data && data.user;
+    if (!user) { location.replace('index.html'); return Promise.reject(new Error('sin sesión')); }
+    return sb.from('profiles').select('*').eq('id', user.id).maybeSingle().then(({ data: profile }) => {
+      if (!profile || profile.status !== 'approved') {
+        location.replace('index.html');
+        return Promise.reject(new Error('cuenta no aprobada'));
+      }
+      CURRENT_USER = user;
+      CURRENT_PROFILE = profile;
+      CURRENT_ROLE = profile.role;
+      document.body.classList.add('role-' + CURRENT_ROLE);
+      document.getElementById('authGate').remove();
+      const label = document.getElementById('currentUserLabel');
+      if (label) {
+        label.textContent = ROLE_LABELS[CURRENT_ROLE] || CURRENT_ROLE;
+        label.title = `${profile.full_name || profile.email} · ${ROLE_LABELS[CURRENT_ROLE] || CURRENT_ROLE}`;
+      }
+    });
+  }).catch((err) => { console.warn('Acceso no confirmado:', err && err.message); });
+}
+requireAuthAndRole();
+
 function idbGetItemsForCategory(categoryId) {
   return sb.from('items').select('*').eq('categoryId', categoryId).order('createdAt', { ascending: true }).then(sbResult);
 }
@@ -868,6 +950,12 @@ function idbPutComment(comment) {
 }
 function idbDeleteComment(id) {
   return sb.from('kanban_comments').delete().eq('id', id).then(sbResult).then(() => {});
+}
+function sbGetAllProfiles() {
+  return sb.from('profiles').select('*').order('createdAt', { ascending: true }).then(sbResult);
+}
+function sbUpdateProfile(id, patch) {
+  return sb.from('profiles').update(patch).eq('id', id).then(sbResult);
 }
 
 /* In-memory cache of every DB-backed custom item, keyed by id — loaded once
@@ -1587,15 +1675,18 @@ const viewProductos = document.getElementById('viewProductos');
 const viewCotizaciones = document.getElementById('viewCotizaciones');
 const viewKanban = document.getElementById('viewKanban');
 const viewTablero3D = document.getElementById('viewTablero3D');
+const viewUsuarios = document.getElementById('viewUsuarios');
 const tabBtnProductos = document.getElementById('tabBtnProductos');
 const tabBtnCotizaciones = document.getElementById('tabBtnCotizaciones');
 const tabBtnKanban = document.getElementById('tabBtnKanban');
 const tabBtnTablero3D = document.getElementById('tabBtnTablero3D');
+const tabBtnUsuarios = document.getElementById('tabBtnUsuarios');
 const TAB_VIEWS = {
   productos: { view: viewProductos, btn: tabBtnProductos },
   cotizaciones: { view: viewCotizaciones, btn: tabBtnCotizaciones },
   kanban: { view: viewKanban, btn: tabBtnKanban },
   tablero3d: { view: viewTablero3D, btn: tabBtnTablero3D },
+  usuarios: { view: viewUsuarios, btn: tabBtnUsuarios },
 };
 function setActiveTab(tab) {
   Object.entries(TAB_VIEWS).forEach(([key, { view, btn }]) => {
@@ -1610,6 +1701,7 @@ function setActiveTab(tab) {
   else if (tab === 'cotizaciones') renderQuotesPanel();
   else if (tab === 'kanban') refreshKanbanData();
   else if (tab === 'tablero3d') requestAnimationFrame(activate3DRoom);
+  else if (tab === 'usuarios') renderUsersPanel();
 }
 tabBtnProductos.addEventListener('click', () => {
   const alreadyOnProductos = !viewProductos.classList.contains('hidden');
@@ -1623,6 +1715,7 @@ tabBtnProductos.addEventListener('click', () => {
 tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
 tabBtnKanban.addEventListener('click', () => setActiveTab('kanban'));
 tabBtnTablero3D.addEventListener('click', () => setActiveTab('tablero3d'));
+tabBtnUsuarios.addEventListener('click', () => setActiveTab('usuarios'));
 
 /* ---------------------------------------------------------
    DOCUMENTO DE COTIZACIÓN — versión elegante para el cliente:
@@ -2106,7 +2199,9 @@ function kanbanTaskCardEl(task) {
   const priority = KANBAN_PRIORITIES.find(p => p.id === task.priority) || KANBAN_PRIORITIES[1];
   const card = document.createElement('div');
   card.className = `bg-white rounded-xl border-l-4 ${priority.accent} border-y border-r border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 p-3 space-y-2 cursor-grab active:cursor-grabbing transition-all duration-150`;
-  card.draggable = true;
+  // "Consulta" puede abrir la tarea para verla, pero no arrastrarla entre
+  // columnas (eso sería una escritura en kanban_tasks, que RLS igual rechazaría).
+  card.draggable = CURRENT_ROLE === 'admin' || CURRENT_ROLE === 'editor';
 
   const member = task.assigneeId ? kanbanMemberById(task.assigneeId) : null;
 
@@ -2437,6 +2532,89 @@ document.getElementById('kanbanMemberForm').addEventListener('submit', (e) => {
     refreshKanbanData();
   });
 });
+
+/* ---------------------------------------------------------
+   USUARIOS (solo administradores) — aprobar/rechazar solicitudes,
+   cambiar el rol de cualquiera o quitarle el acceso. Todo lo que
+   hacen estos botones también está protegido por RLS del lado de
+   Supabase (solo un admin puede actualizar profiles), así que aunque
+   alguien forzara esta pantalla sin serlo, la base de datos rechaza
+   el cambio igual.
+--------------------------------------------------------- */
+function usersDateStr(ts) {
+  return ts ? new Date(ts).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+}
+
+function userPendingRowEl(p) {
+  const row = document.createElement('div');
+  row.className = 'bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center gap-3 flex-wrap';
+  row.innerHTML = `
+    <div class="flex-1 min-w-[160px]">
+      <div class="text-sm font-semibold text-slate-800">${escapeHtml(p.full_name) || 'Sin nombre'}</div>
+      <div class="text-[11px] text-slate-400">${escapeHtml(p.email)} · ${usersDateStr(p.createdAt)}</div>
+    </div>
+    <select class="js-role text-xs border border-slate-200 rounded px-2 py-1.5 bg-white">
+      <option value="consulta">Consulta</option>
+      <option value="editor">Editor</option>
+      <option value="admin">Administrador</option>
+    </select>
+    <button type="button" class="js-approve text-xs font-semibold px-3 py-1.5 rounded bg-emerald-500 hover:bg-emerald-400 text-white">Aprobar</button>
+    <button type="button" class="js-reject text-xs px-3 py-1.5 rounded border border-red-200 text-red-500 hover:bg-red-50">Rechazar</button>
+  `;
+  row.querySelector('.js-approve').addEventListener('click', () => {
+    const role = row.querySelector('.js-role').value;
+    sbUpdateProfile(p.id, { role, status: 'approved' }).then(renderUsersPanel);
+  });
+  row.querySelector('.js-reject').addEventListener('click', () => {
+    if (!confirm(`¿Rechazar el acceso de ${p.full_name || p.email}?`)) return;
+    sbUpdateProfile(p.id, { status: 'rejected' }).then(renderUsersPanel);
+  });
+  return row;
+}
+
+function userApprovedRowEl(p) {
+  const isSelf = CURRENT_USER && p.id === CURRENT_USER.id;
+  const row = document.createElement('div');
+  row.className = 'bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center gap-3 flex-wrap';
+  row.innerHTML = `
+    <div class="flex-1 min-w-[160px]">
+      <div class="text-sm font-semibold text-slate-800">${escapeHtml(p.full_name) || 'Sin nombre'}${isSelf ? ' <span class="text-[10px] text-slate-400 font-normal">(tú)</span>' : ''}</div>
+      <div class="text-[11px] text-slate-400">${escapeHtml(p.email)}</div>
+    </div>
+    <select class="js-role text-xs border border-slate-200 rounded px-2 py-1.5 bg-white" ${isSelf ? 'disabled' : ''}>
+      <option value="consulta">Consulta</option>
+      <option value="editor">Editor</option>
+      <option value="admin">Administrador</option>
+    </select>
+    <button type="button" class="js-revoke text-xs px-3 py-1.5 rounded border border-red-200 text-red-500 hover:bg-red-50" ${isSelf ? 'disabled' : ''}>Quitar acceso</button>
+  `;
+  row.querySelector('.js-role').value = p.role;
+  if (!isSelf) {
+    row.querySelector('.js-role').addEventListener('change', (e) => {
+      sbUpdateProfile(p.id, { role: e.target.value }).then(renderUsersPanel);
+    });
+    row.querySelector('.js-revoke').addEventListener('click', () => {
+      if (!confirm(`¿Quitarle el acceso a ${p.full_name || p.email}? Tendría que ser aprobado de nuevo para volver a entrar.`)) return;
+      sbUpdateProfile(p.id, { status: 'pending' }).then(renderUsersPanel);
+    });
+  }
+  return row;
+}
+
+function renderUsersPanel() {
+  sbGetAllProfiles().then(profiles => {
+    const pendingWrap = document.getElementById('usersPendingList');
+    const approvedWrap = document.getElementById('usersApprovedList');
+    pendingWrap.innerHTML = '';
+    approvedWrap.innerHTML = '';
+    const pending = profiles.filter(p => p.status === 'pending');
+    const approved = profiles.filter(p => p.status === 'approved');
+    if (!pending.length) pendingWrap.innerHTML = '<p class="text-[11px] text-slate-300 italic">No hay solicitudes pendientes.</p>';
+    pending.forEach(p => pendingWrap.appendChild(userPendingRowEl(p)));
+    if (!approved.length) approvedWrap.innerHTML = '<p class="text-[11px] text-slate-300 italic">No hay usuarios aprobados.</p>';
+    approved.forEach(p => approvedWrap.appendChild(userApprovedRowEl(p)));
+  });
+}
 
 /* ---------------------------------------------------------
    SELECTION TOOLBAR (rotate / duplicate / delete)
@@ -2875,8 +3053,7 @@ function loadFromShareLinkIfPresent() {
 loadFromShareLinkIfPresent();
 
 document.getElementById('btnLogout').addEventListener('click', () => {
-  sessionStorage.removeItem('tablero_session');
-  location.href = 'index.html';
+  sb.auth.signOut().then(() => { location.href = 'index.html'; });
 });
 
 /* ---------------------------------------------------------
@@ -3392,8 +3569,11 @@ function update3DSizeLabel() {
 
 function select3DObject(group) {
   selected3DGroup = group;
-  transformControls3D.attach(group);
-  document.getElementById('btn3DDeleteSelected').classList.remove('hidden');
+  // "Consulta" puede seleccionar para ver el tamaño, pero no se le engancha
+  // el gizmo de mover/girar/escalar (esa es una escritura en room3d).
+  const canWrite3D = CURRENT_ROLE === 'admin' || CURRENT_ROLE === 'editor';
+  if (canWrite3D) transformControls3D.attach(group);
+  document.getElementById('btn3DDeleteSelected').classList.toggle('hidden', !canWrite3D);
   update3DSizeLabel();
 }
 function deselect3DObject() {

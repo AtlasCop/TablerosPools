@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Aqua Bruma — Iniciar sesión</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   html, body { height: 100%; margin: 0; }
   .bg-hero {
@@ -38,9 +39,9 @@
       <h2 class="text-base font-semibold mb-4">Iniciar sesión</h2>
       <form id="loginForm" class="space-y-3">
         <div>
-          <label class="block text-xs text-white/70 mb-1">Usuario</label>
-          <input id="loginUser" type="text" autocomplete="username"
-            class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="tu usuario" />
+          <label class="block text-xs text-white/70 mb-1">Correo</label>
+          <input id="loginEmail" type="email" autocomplete="username"
+            class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="tu@correo.com" />
         </div>
         <div>
           <label class="block text-xs text-white/70 mb-1">Contraseña</label>
@@ -48,7 +49,7 @@
             class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="••••••••" />
         </div>
         <p id="loginError" class="hidden text-xs text-red-300"></p>
-        <button type="submit" class="w-full bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg py-2.5 transition">Entrar</button>
+        <button type="submit" id="loginSubmitBtn" class="w-full bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg py-2.5 transition">Entrar</button>
       </form>
       <div class="flex items-center justify-between mt-4 text-xs">
         <button id="goRecover" class="text-sky-300 hover:text-sky-200">¿Olvidaste tu contraseña?</button>
@@ -59,15 +60,14 @@
     <!-- REGISTER -->
     <div id="viewRegister" class="hidden">
       <h2 class="text-base font-semibold mb-1">Crear tu cuenta</h2>
-      <p class="text-xs text-white/60 mb-4">Define una pregunta de seguridad: es la única forma de recuperar la contraseña más adelante.</p>
+      <p class="text-xs text-white/60 mb-4">Después de registrarte, un administrador debe aprobar tu acceso antes de que puedas entrar.</p>
       <form id="registerForm" class="space-y-3">
-        <input id="regUser" type="text" autocomplete="username" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Usuario" />
-        <input id="regPass" type="password" autocomplete="new-password" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Contraseña" />
+        <input id="regName" type="text" autocomplete="name" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Nombre completo" />
+        <input id="regEmail" type="email" autocomplete="username" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Correo" />
+        <input id="regPass" type="password" autocomplete="new-password" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Contraseña (mínimo 6 caracteres)" />
         <input id="regPass2" type="password" autocomplete="new-password" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Confirmar contraseña" />
-        <input id="regQuestion" type="text" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Pregunta de seguridad (ej. ¿nombre de tu primera mascota?)" />
-        <input id="regAnswer" type="text" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Respuesta" />
         <p id="registerError" class="hidden text-xs text-red-300"></p>
-        <button type="submit" class="w-full bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg py-2.5 transition">Crear cuenta</button>
+        <button type="submit" id="registerSubmitBtn" class="w-full bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg py-2.5 transition">Crear cuenta</button>
       </form>
       <button id="goLoginFromRegister" class="mt-4 text-xs text-white/50 hover:text-white/80">Ya tengo cuenta</button>
     </div>
@@ -75,130 +75,186 @@
     <!-- RECOVER -->
     <div id="viewRecover" class="hidden">
       <h2 class="text-base font-semibold mb-4">Recuperar contraseña</h2>
-
-      <div id="recoverStep1" class="space-y-3">
-        <input id="recoverUser" type="text" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Tu usuario" />
-        <button id="recoverFindBtn" class="w-full bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg py-2.5 transition">Continuar</button>
-      </div>
-
-      <div id="recoverStep2" class="hidden space-y-3">
-        <p id="recoverQuestionText" class="text-xs text-white/70 bg-white/5 rounded-lg px-3 py-2"></p>
-        <input id="recoverAnswer" type="text" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Tu respuesta" />
-        <input id="recoverNewPass" type="password" autocomplete="new-password" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Nueva contraseña" />
-        <input id="recoverNewPass2" type="password" autocomplete="new-password" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Confirmar nueva contraseña" />
-        <button id="recoverResetBtn" class="w-full bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg py-2.5 transition">Restablecer contraseña</button>
-      </div>
-
+      <p class="text-xs text-white/60 mb-4">Escribe tu correo y te enviaremos un enlace para elegir una nueva contraseña.</p>
+      <form id="recoverForm" class="space-y-3">
+        <input id="recoverEmail" type="email" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Tu correo" />
+        <button type="submit" id="recoverSubmitBtn" class="w-full bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg py-2.5 transition">Enviar enlace</button>
+      </form>
       <p id="recoverError" class="hidden text-xs text-red-300 mt-3"></p>
       <p id="recoverSuccess" class="hidden text-xs text-emerald-300 mt-3"></p>
       <button id="goLoginFromRecover" class="mt-4 text-xs text-white/50 hover:text-white/80">Volver a iniciar sesión</button>
     </div>
 
+    <!-- RESET PASSWORD (llega aquí desde el enlace del correo) -->
+    <div id="viewResetPassword" class="hidden">
+      <h2 class="text-base font-semibold mb-1">Elige una nueva contraseña</h2>
+      <p class="text-xs text-white/60 mb-4">Este enlace confirma que eres tú — ya puedes definir tu nueva contraseña.</p>
+      <form id="resetPasswordForm" class="space-y-3">
+        <input id="resetPass1" type="password" autocomplete="new-password" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Nueva contraseña" />
+        <input id="resetPass2" type="password" autocomplete="new-password" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400" placeholder="Confirmar nueva contraseña" />
+        <p id="resetPasswordError" class="hidden text-xs text-red-300"></p>
+        <button type="submit" id="resetPasswordSubmitBtn" class="w-full bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg py-2.5 transition">Guardar contraseña</button>
+      </form>
+    </div>
+
+    <!-- PENDING / REJECTED -->
+    <div id="viewStatus" class="hidden text-center py-2">
+      <div id="statusIcon" class="text-3xl mb-2"></div>
+      <h2 id="statusTitle" class="text-base font-semibold mb-1"></h2>
+      <p id="statusMessage" class="text-xs text-white/60 leading-relaxed"></p>
+      <button id="goLoginFromStatus" class="mt-5 text-xs text-white/50 hover:text-white/80">Cerrar sesión y volver</button>
+    </div>
+
   </div>
 
   <p class="text-center text-white/40 text-[11px] mt-4 leading-relaxed">
-    El acceso se guarda solo en este navegador — no hay servidor ni recuperación por correo.
+    Cuentas reales con aprobación de administrador — tu acceso queda guardado en el servidor, no solo en este navegador.
   </p>
 </div>
 
 <script>
-const AUTH_KEY = 'tablero_auth_account';
-function getAccount() { try { return JSON.parse(localStorage.getItem(AUTH_KEY)); } catch { return null; } }
-function setAccount(acc) { localStorage.setItem(AUTH_KEY, JSON.stringify(acc)); }
+const SUPABASE_URL = 'https://cpoqtkeuwphligteyqkb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_dGajkUOgELahDEV_s4zM3A_i6WFYrEc';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 function showView(name) {
-  ['Login', 'Register', 'Recover'].forEach(v => {
+  ['Login', 'Register', 'Recover', 'ResetPassword', 'Status'].forEach(v => {
     document.getElementById('view' + v).classList.toggle('hidden', v !== name);
   });
 }
-
-showView(getAccount() ? 'Login' : 'Register');
 
 document.getElementById('goRecover').addEventListener('click', () => showView('Recover'));
 document.getElementById('goRegisterFromLogin').addEventListener('click', () => showView('Register'));
 document.getElementById('goLoginFromRegister').addEventListener('click', () => showView('Login'));
 document.getElementById('goLoginFromRecover').addEventListener('click', () => showView('Login'));
+document.getElementById('goLoginFromStatus').addEventListener('click', () => {
+  sb.auth.signOut().then(() => showView('Login'));
+});
 
-function goToBoard() {
-  sessionStorage.setItem('tablero_session', 'active');
-  location.href = 'tablero.html' + location.hash;
+function withBusy(btn, busyLabel, fn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = busyLabel;
+  return fn().finally(() => { btn.disabled = false; btn.textContent = original; });
+}
+
+function showStatus(kind, title, message) {
+  document.getElementById('statusIcon').textContent = kind === 'pending' ? '⏳' : (kind === 'rejected' ? '🚫' : '✅');
+  document.getElementById('statusTitle').textContent = title;
+  document.getElementById('statusMessage').textContent = message;
+  showView('Status');
+}
+
+/* Tras iniciar sesión (o al recargar con una sesión ya activa), decide
+   a dónde va la persona según su perfil: aprobado -> tablero.html,
+   pendiente/rechazado -> pantalla de estado, sin perfil todavía
+   (recién confirmó el correo) -> tratado como pendiente. */
+function routeAfterLogin() {
+  return sb.auth.getUser().then(({ data }) => {
+    const user = data && data.user;
+    if (!user) { showView('Login'); return; }
+    return sb.from('profiles').select('status, role').eq('id', user.id).maybeSingle().then(({ data: profile }) => {
+      const status = profile ? profile.status : 'pending';
+      if (status === 'approved') {
+        location.href = 'tablero.html' + location.hash;
+      } else if (status === 'rejected') {
+        showStatus('rejected', 'Acceso rechazado', 'Un administrador rechazó tu solicitud de acceso a Aqua Bruma. Si crees que es un error, contacta a tu administrador.');
+      } else {
+        showStatus('pending', 'Cuenta pendiente de aprobación', 'Ya creaste tu cuenta. Un administrador debe aprobarla y asignarte un rol antes de que puedas entrar. Vuelve a intentar más tarde.');
+      }
+    });
+  });
 }
 
 /* LOGIN */
 document.getElementById('loginForm').addEventListener('submit', (e) => {
   e.preventDefault();
-  const u = document.getElementById('loginUser').value.trim();
-  const p = document.getElementById('loginPass').value;
-  const acc = getAccount();
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
   const err = document.getElementById('loginError');
-  if (!acc || u !== acc.username || p !== acc.password) {
-    err.textContent = 'Usuario o contraseña incorrectos.';
-    err.classList.remove('hidden');
-    return;
-  }
   err.classList.add('hidden');
-  goToBoard();
+  if (!email || !pass) { err.textContent = 'Completa correo y contraseña.'; err.classList.remove('hidden'); return; }
+  withBusy(document.getElementById('loginSubmitBtn'), 'Entrando…', () =>
+    sb.auth.signInWithPassword({ email, password: pass }).then(({ error }) => {
+      if (error) { err.textContent = 'Correo o contraseña incorrectos.'; err.classList.remove('hidden'); return; }
+      return routeAfterLogin();
+    })
+  );
 });
 
 /* REGISTER */
 document.getElementById('registerForm').addEventListener('submit', (e) => {
   e.preventDefault();
-  const u = document.getElementById('regUser').value.trim();
-  const p = document.getElementById('regPass').value;
-  const p2 = document.getElementById('regPass2').value;
-  const q = document.getElementById('regQuestion').value.trim();
-  const a = document.getElementById('regAnswer').value.trim();
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass = document.getElementById('regPass').value;
+  const pass2 = document.getElementById('regPass2').value;
   const err = document.getElementById('registerError');
   err.classList.add('hidden');
-  if (!u || !p || !q || !a) { err.textContent = 'Completa todos los campos.'; err.classList.remove('hidden'); return; }
-  if (p !== p2) { err.textContent = 'Las contraseñas no coinciden.'; err.classList.remove('hidden'); return; }
-  setAccount({ username: u, password: p, question: q, answer: a });
-  goToBoard();
+  if (!name || !email || !pass) { err.textContent = 'Completa todos los campos.'; err.classList.remove('hidden'); return; }
+  if (pass.length < 6) { err.textContent = 'La contraseña debe tener al menos 6 caracteres.'; err.classList.remove('hidden'); return; }
+  if (pass !== pass2) { err.textContent = 'Las contraseñas no coinciden.'; err.classList.remove('hidden'); return; }
+  withBusy(document.getElementById('registerSubmitBtn'), 'Creando…', () =>
+    sb.auth.signUp({ email, password: pass, options: { data: { full_name: name } } }).then(({ data, error }) => {
+      if (error) { err.textContent = error.message || 'No se pudo crear la cuenta.'; err.classList.remove('hidden'); return; }
+      if (data && data.session) {
+        // Confirmación de correo desactivada en el proyecto: ya hay sesión.
+        return routeAfterLogin();
+      }
+      showStatus('pending', 'Revisa tu correo', 'Te enviamos un enlace para confirmar tu cuenta. Después de confirmarla, un administrador debe aprobarla antes de que puedas entrar.');
+    })
+  );
 });
 
 /* RECOVER */
-document.getElementById('recoverFindBtn').addEventListener('click', () => {
-  const u = document.getElementById('recoverUser').value.trim();
-  const acc = getAccount();
-  const err = document.getElementById('recoverError');
-  err.classList.add('hidden');
-  if (!acc || u !== acc.username) {
-    err.textContent = 'No encontramos ese usuario en este navegador.';
-    err.classList.remove('hidden');
-    return;
-  }
-  document.getElementById('recoverQuestionText').textContent = acc.question;
-  document.getElementById('recoverStep1').classList.add('hidden');
-  document.getElementById('recoverStep2').classList.remove('hidden');
-});
-
-document.getElementById('recoverResetBtn').addEventListener('click', () => {
-  const acc = getAccount();
-  const answer = document.getElementById('recoverAnswer').value.trim();
-  const newPass = document.getElementById('recoverNewPass').value;
-  const newPass2 = document.getElementById('recoverNewPass2').value;
+document.getElementById('recoverForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = document.getElementById('recoverEmail').value.trim();
   const err = document.getElementById('recoverError');
   const ok = document.getElementById('recoverSuccess');
   err.classList.add('hidden');
   ok.classList.add('hidden');
-  if (!acc || answer.toLowerCase() !== (acc.answer || '').toLowerCase()) {
-    err.textContent = 'La respuesta no coincide.';
-    err.classList.remove('hidden');
-    return;
+  if (!email) { err.textContent = 'Escribe tu correo.'; err.classList.remove('hidden'); return; }
+  withBusy(document.getElementById('recoverSubmitBtn'), 'Enviando…', () =>
+    sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname }).then(({ error }) => {
+      if (error) { err.textContent = 'No se pudo enviar el enlace. Intenta de nuevo.'; err.classList.remove('hidden'); return; }
+      ok.textContent = 'Listo — revisa tu correo y sigue el enlace para elegir una nueva contraseña.';
+      ok.classList.remove('hidden');
+    })
+  );
+});
+
+/* RESET PASSWORD (tras hacer clic en el enlace del correo) */
+document.getElementById('resetPasswordForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const p1 = document.getElementById('resetPass1').value;
+  const p2 = document.getElementById('resetPass2').value;
+  const err = document.getElementById('resetPasswordError');
+  err.classList.add('hidden');
+  if (p1.length < 6) { err.textContent = 'La contraseña debe tener al menos 6 caracteres.'; err.classList.remove('hidden'); return; }
+  if (p1 !== p2) { err.textContent = 'Las contraseñas no coinciden.'; err.classList.remove('hidden'); return; }
+  withBusy(document.getElementById('resetPasswordSubmitBtn'), 'Guardando…', () =>
+    sb.auth.updateUser({ password: p1 }).then(({ error }) => {
+      if (error) { err.textContent = 'No se pudo actualizar la contraseña.'; err.classList.remove('hidden'); return; }
+      return routeAfterLogin();
+    })
+  );
+});
+
+/* Supabase redirige aquí con un evento PASSWORD_RECOVERY cuando la
+   persona hace clic en el enlace del correo de recuperación. */
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') showView('ResetPassword');
+});
+
+/* Si ya hay sesión activa (o el enlace de recuperación acaba de
+   crear una), decide a dónde ir en vez de mostrar el login de una. */
+sb.auth.getSession().then(({ data }) => {
+  if (data && data.session && location.hash.indexOf('type=recovery') === -1) {
+    routeAfterLogin();
+  } else if (!location.hash) {
+    showView('Login');
   }
-  if (!newPass || newPass !== newPass2) {
-    err.textContent = 'Las contraseñas nuevas no coinciden.';
-    err.classList.remove('hidden');
-    return;
-  }
-  acc.password = newPass;
-  setAccount(acc);
-  ok.textContent = 'Contraseña actualizada. Ya puedes iniciar sesión.';
-  ok.classList.remove('hidden');
-  document.getElementById('recoverStep1').classList.remove('hidden');
-  document.getElementById('recoverStep2').classList.add('hidden');
-  document.getElementById('recoverUser').value = '';
-  setTimeout(() => showView('Login'), 1400);
 });
 </script>
 </body>

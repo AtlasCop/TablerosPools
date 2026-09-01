@@ -116,13 +116,77 @@ create table if not exists room3d (
 );
 insert into room3d (id) values ('default') on conflict (id) do nothing;
 
+-- ============================================================
+-- USUARIOS REALES, APROBACIÓN Y ROLES
+-- Reemplaza el login local por autenticación real de Supabase
+-- (correo + contraseña). Quien se registra queda "pending" y sin
+-- acceso a nada hasta que un administrador lo apruebe y le asigne
+-- un rol. Los permisos de abajo se hacen cumplir en la base de
+-- datos (RLS), no solo ocultando botones en la pantalla.
+-- ============================================================
+
+-- Un perfil por cada cuenta de auth.users — guarda su estado de
+-- aprobación y su rol. role: 'consulta' | 'editor' | 'admin'.
+-- status: 'pending' | 'approved' | 'rejected'.
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text,
+  full_name text,
+  role text not null default 'consulta',
+  status text not null default 'pending',
+  "createdAt" timestamptz not null default now()
+);
+
+-- Crea el perfil automáticamente cuando alguien se registra
+-- (security definer: corre con privilegios elevados para poder
+-- insertar en profiles pasando por encima de sus propias políticas).
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, full_name, role, status)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', ''), 'consulta', 'pending');
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Rol del usuario actual, solo si ya fue aprobado (NULL si está
+-- pendiente/rechazado o no tiene sesión) — security definer para
+-- poder leer profiles sin caer en las políticas de profiles mismas
+-- (evita recursión) y para que las demás tablas puedan usarla.
+create or replace function public.current_user_role()
+returns text
+language sql
+security definer
+stable
+as $$
+  select role from public.profiles where id = auth.uid() and status = 'approved';
+$$;
+
+alter table profiles enable row level security;
+drop policy if exists "leer mi propio perfil" on profiles;
+create policy "leer mi propio perfil" on profiles for select
+  to authenticated using (id = auth.uid());
+drop policy if exists "admins leen todos los perfiles" on profiles;
+create policy "admins leen todos los perfiles" on profiles for select
+  to authenticated using (public.current_user_role() = 'admin');
+drop policy if exists "admins actualizan perfiles" on profiles;
+create policy "admins actualizan perfiles" on profiles for update
+  to authenticated using (public.current_user_role() = 'admin');
+
 -- ------------------------------------------------------------
--- Acceso: el login de la app es solo una pantalla local (no hay
--- autenticación real contra Supabase), así que se deja la clave
--- publicable con permiso total de lectura/escritura sobre estas
--- tablas. Cualquiera que tenga esa clave podría leer/escribir
--- directo a la base de datos sin pasar por el login — ver el
--- README del proyecto para el detalle de esta limitación.
+-- Permisos por tabla — ver el mapa de roles en el README/memoria
+-- del proyecto. Regla general: cualquier usuario aprobado puede
+-- LEER todo; crear/editar/eliminar requiere admin o editor, EXCEPTO
+-- cotizaciones, donde "consulta" también puede crear/ver/cambiar
+-- estado (pero no eliminar).
 -- ------------------------------------------------------------
 alter table items enable row level security;
 alter table counters enable row level security;
@@ -132,23 +196,86 @@ alter table kanban_members enable row level security;
 alter table room3d enable row level security;
 alter table kanban_comments enable row level security;
 
+-- items (inventario)
 drop policy if exists "allow all - items" on items;
-create policy "allow all - items" on items for all to anon, authenticated using (true) with check (true);
+drop policy if exists "items: leer" on items;
+create policy "items: leer" on items for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "items: escribir" on items;
+create policy "items: escribir" on items for all to authenticated
+  using (public.current_user_role() in ('admin', 'editor'))
+  with check (public.current_user_role() in ('admin', 'editor'));
 
+-- counters (soporte del código automático — mismos permisos que items)
 drop policy if exists "allow all - counters" on counters;
-create policy "allow all - counters" on counters for all to anon, authenticated using (true) with check (true);
+drop policy if exists "counters: escribir" on counters;
+create policy "counters: escribir" on counters for all to authenticated
+  using (public.current_user_role() in ('admin', 'editor'))
+  with check (public.current_user_role() in ('admin', 'editor'));
 
+-- quotes (cotizaciones) — "consulta" también puede crear/ver/actualizar
 drop policy if exists "allow all - quotes" on quotes;
-create policy "allow all - quotes" on quotes for all to anon, authenticated using (true) with check (true);
+drop policy if exists "quotes: leer" on quotes;
+create policy "quotes: leer" on quotes for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "quotes: crear" on quotes;
+create policy "quotes: crear" on quotes for insert to authenticated
+  with check (public.current_user_role() in ('admin', 'editor', 'consulta'));
+drop policy if exists "quotes: actualizar" on quotes;
+create policy "quotes: actualizar" on quotes for update to authenticated
+  using (public.current_user_role() in ('admin', 'editor', 'consulta'))
+  with check (public.current_user_role() in ('admin', 'editor', 'consulta'));
+drop policy if exists "quotes: eliminar" on quotes;
+create policy "quotes: eliminar" on quotes for delete to authenticated
+  using (public.current_user_role() in ('admin', 'editor'));
 
+-- kanban_tasks
 drop policy if exists "allow all - kanban_tasks" on kanban_tasks;
-create policy "allow all - kanban_tasks" on kanban_tasks for all to anon, authenticated using (true) with check (true);
+drop policy if exists "kanban_tasks: leer" on kanban_tasks;
+create policy "kanban_tasks: leer" on kanban_tasks for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "kanban_tasks: escribir" on kanban_tasks;
+create policy "kanban_tasks: escribir" on kanban_tasks for all to authenticated
+  using (public.current_user_role() in ('admin', 'editor'))
+  with check (public.current_user_role() in ('admin', 'editor'));
 
+-- kanban_members (equipo)
 drop policy if exists "allow all - kanban_members" on kanban_members;
-create policy "allow all - kanban_members" on kanban_members for all to anon, authenticated using (true) with check (true);
+drop policy if exists "kanban_members: leer" on kanban_members;
+create policy "kanban_members: leer" on kanban_members for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "kanban_members: escribir" on kanban_members;
+create policy "kanban_members: escribir" on kanban_members for all to authenticated
+  using (public.current_user_role() in ('admin', 'editor'))
+  with check (public.current_user_role() in ('admin', 'editor'));
 
-drop policy if exists "allow all - room3d" on room3d;
-create policy "allow all - room3d" on room3d for all to anon, authenticated using (true) with check (true);
-
+-- kanban_comments
 drop policy if exists "allow all - kanban_comments" on kanban_comments;
-create policy "allow all - kanban_comments" on kanban_comments for all to anon, authenticated using (true) with check (true);
+drop policy if exists "kanban_comments: leer" on kanban_comments;
+create policy "kanban_comments: leer" on kanban_comments for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "kanban_comments: escribir" on kanban_comments;
+create policy "kanban_comments: escribir" on kanban_comments for all to authenticated
+  using (public.current_user_role() in ('admin', 'editor'))
+  with check (public.current_user_role() in ('admin', 'editor'));
+
+-- room3d (tablero 3D)
+drop policy if exists "allow all - room3d" on room3d;
+drop policy if exists "room3d: leer" on room3d;
+create policy "room3d: leer" on room3d for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "room3d: escribir" on room3d;
+create policy "room3d: escribir" on room3d for all to authenticated
+  using (public.current_user_role() in ('admin', 'editor'))
+  with check (public.current_user_role() in ('admin', 'editor'));
+
+-- ============================================================
+-- PASO MANUAL, UNA SOLA VEZ: crear el primer administrador
+-- ============================================================
+-- Nadie puede aprobarse a sí mismo, así que el primer administrador
+-- hay que crearlo a mano aquí. Pasos:
+--   1. Corre TODO lo de arriba de este archivo primero (Run).
+--   2. Ve a la app (index.html) y REGÍSTRATE normalmente con tu
+--      correo real — quedará "pendiente", es normal.
+--   3. Reemplaza el correo en la línea de abajo por el tuyo, borra
+--      los guiones "--" que la comentan, y corre SOLO esa línea
+--      (selecciónala y dale Run, o corre todo el archivo de nuevo).
+--
+-- update public.profiles set role = 'admin', status = 'approved' where email = 'tu-correo@ejemplo.com';
+--
+-- De ahí en adelante, ya puedes aprobar a los demás desde la
+-- pestaña "Usuarios" de la app, sin volver a tocar SQL.
