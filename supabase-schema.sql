@@ -86,6 +86,17 @@ create table if not exists kanban_members (
 -- Por si la tabla ya existía de una corrida anterior de este script:
 alter table kanban_members add column if not exists phone text;
 
+-- Tablero 3D: una sola "sala" compartida por todo el equipo (medidas
+-- reales del cuarto de máquinas + los equipos colocados en ella).
+create table if not exists room3d (
+  id text primary key default 'default',
+  width numeric default 4,
+  depth numeric default 3,
+  height numeric default 2.5,
+  objects jsonb default '[]'::jsonb
+);
+insert into room3d (id) values ('default') on conflict (id) do nothing;
+
 -- ------------------------------------------------------------
 -- Acceso: el login de la app es solo una pantalla local (no hay
 -- autenticación real contra Supabase), así que se deja la clave
@@ -99,6 +110,7 @@ alter table counters enable row level security;
 alter table quotes enable row level security;
 alter table kanban_tasks enable row level security;
 alter table kanban_members enable row level security;
+alter table room3d enable row level security;
 
 drop policy if exists "allow all - items" on items;
 create policy "allow all - items" on items for all to anon, authenticated using (true) with check (true);
@@ -114,3 +126,6 @@ create policy "allow all - kanban_tasks" on kanban_tasks for all to anon, authen
 
 drop policy if exists "allow all - kanban_members" on kanban_members;
 create policy "allow all - kanban_members" on kanban_members for all to anon, authenticated using (true) with check (true);
+
+drop policy if exists "allow all - room3d" on room3d;
+create policy "allow all - room3d" on room3d for all to anon, authenticated using (true) with check (true);

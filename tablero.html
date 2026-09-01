@@ -828,6 +828,12 @@ function idbGetAllMembers() {
 function idbDeleteMember(id) {
   return sb.from('kanban_members').delete().eq('id', id).then(sbResult).then(() => {});
 }
+function sbSaveRoom3D(data) {
+  return sb.from('room3d').upsert({ id: 'default', width: data.width, depth: data.depth, height: data.height, objects: data.objects }).then(sbResult).then(() => data);
+}
+function sbLoadRoom3D() {
+  return sb.from('room3d').select('*').eq('id', 'default').maybeSingle().then(sbResult);
+}
 
 /* In-memory cache of every DB-backed custom item, keyed by id — loaded once
    at startup (all categories, not just the active one) so drag-drop, the
@@ -3042,12 +3048,12 @@ itemForm.addEventListener('submit', (e) => {
    medidas reales (metros) + cada equipo como una caja con su color
    de categoría, seleccionable y manipulable con los gizmos de
    THREE.TransformControls (mover/girar/escalar), igual que en un
-   editor 3D normal. Se guarda solo en este navegador (localStorage,
-   igual que "Mis tableros" del tablero 2D — no es dato compartido
-   en Supabase todavía).
+   editor 3D normal. Se guarda en Supabase (tabla "room3d", una sola
+   fila compartida por todo el equipo) — se vuelve a leer cada vez
+   que se entra a esta pestaña, igual que el Kanban, para ver
+   cambios que haya hecho otra persona desde otro computador.
 --------------------------------------------------------- */
 const EQUIP_BASE_SIZE = 0.4; // metros — caja genérica de 40cm antes de escalar
-const ROOM_3D_KEY = 'tablero_3d_room';
 
 let scene3D, camera3D, renderer3D, orbitControls3D, transformControls3D;
 let objectsGroup3D, roomGroup3D, raycaster3D, mouse3D;
@@ -3215,24 +3221,36 @@ function save3DRoom() {
     rotationY: g.rotation.y,
     scale: [g.scale.x, g.scale.y, g.scale.z],
   }));
-  const data = { width: room3DDims.width, depth: room3DDims.depth, height: room3DDims.height, objects };
-  try { localStorage.setItem(ROOM_3D_KEY, JSON.stringify(data)); } catch (e) { console.warn('No se pudo guardar el tablero 3D', e); }
+  sbSaveRoom3D({ width: room3DDims.width, depth: room3DDims.depth, height: room3DDims.height, objects })
+    .catch(e => console.warn('No se pudo guardar el tablero 3D en la nube', e));
 }
+/* Se vuelve a leer de Supabase cada vez que se entra a la pestaña
+   (igual que refreshKanbanData()), para ver cambios que haya hecho
+   otra persona del equipo desde otro computador — no solo la
+   primera vez que se abre la página. */
 function load3DRoom() {
-  let data;
-  try { data = JSON.parse(localStorage.getItem(ROOM_3D_KEY)); } catch { data = null; }
-  if (data) {
-    room3DDims = { width: data.width || 4, depth: data.depth || 3, height: data.height || 2.5 };
-  }
-  document.getElementById('room3DWidth').value = room3DDims.width;
-  document.getElementById('room3DDepth').value = room3DDims.depth;
-  document.getElementById('room3DHeight').value = room3DDims.height;
-  buildRoom3D();
-  (data && data.objects || []).forEach(o => {
-    const item = CUSTOM_ITEMS_BY_ID[o.itemId] || { id: o.itemId, name: o.label, categoryId: null };
-    createEquipmentObject3D(item, o, o.color);
-  });
-  document.getElementById('room3DHint').classList.toggle('hidden', objectsGroup3D.children.length > 0);
+  return sbLoadRoom3D().then(data => {
+    if (selected3DGroup) deselect3DObject();
+    [...objectsGroup3D.children].forEach(g => {
+      objectsGroup3D.remove(g);
+      g.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+    });
+    if (data) {
+      room3DDims = { width: Number(data.width) || 4, depth: Number(data.depth) || 3, height: Number(data.height) || 2.5 };
+    }
+    document.getElementById('room3DWidth').value = room3DDims.width;
+    document.getElementById('room3DDepth').value = room3DDims.depth;
+    document.getElementById('room3DHeight').value = room3DDims.height;
+    buildRoom3D();
+    (data && data.objects || []).forEach(o => {
+      const item = CUSTOM_ITEMS_BY_ID[o.itemId] || { id: o.itemId, name: o.label, categoryId: null };
+      createEquipmentObject3D(item, o, o.color);
+    });
+    document.getElementById('room3DHint').classList.toggle('hidden', objectsGroup3D.children.length > 0);
+  }).catch(e => console.warn('No se pudo cargar el tablero 3D desde la nube', e));
 }
 
 function resize3DRenderer() {
@@ -3309,7 +3327,7 @@ function init3DScene() {
     handle3DSceneClick(e);
   });
 
-  load3DRoom();
+  buildRoom3D(); // placeholder con medidas por defecto mientras llega lo guardado en la nube
   window.addEventListener('resize', resize3DRenderer);
 }
 
@@ -3317,6 +3335,7 @@ function activate3DRoom() {
   init3DScene();
   resize3DRenderer();
   if (!animating3D) { animating3D = true; animate3D(); }
+  load3DRoom();
 }
 
 /* Toolbar — los listeners se registran una sola vez al cargar la
