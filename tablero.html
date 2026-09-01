@@ -689,7 +689,12 @@
       </div>
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">Categoría en la cotización</label>
-        <select id="itemQuoteCategory" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white"></select>
+        <div class="relative">
+          <input id="itemQuoteCategorySearch" type="text" autocomplete="off" placeholder="Buscar categoría de cotización…"
+            class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+          <input id="itemQuoteCategory" type="hidden" />
+          <div id="itemQuoteCategoryList" class="hidden absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl z-30"></div>
+        </div>
         <p class="text-[10px] text-slate-400 mt-1">En qué sección de la cotización aparece este objeto al arrastrarlo al tablero. Se sugiere una por defecto, pero puedes cambiarla.</p>
       </div>
       <p id="itemFormError" class="hidden text-xs text-red-500"></p>
@@ -3489,14 +3494,62 @@ const itemNameInput = document.getElementById('itemName');
 const itemSublineInput = document.getElementById('itemSubline');
 const itemDescriptionInput = document.getElementById('itemDescription');
 const itemPriceInput = document.getElementById('itemPrice');
-const itemQuoteCategorySelect = document.getElementById('itemQuoteCategory');
 const itemFormError = document.getElementById('itemFormError');
 
-QUOTE_CATEGORIES.forEach(qc => {
-  const opt = document.createElement('option');
-  opt.value = qc.id;
-  opt.textContent = qc.label;
-  itemQuoteCategorySelect.appendChild(opt);
+/* "Categoría en la cotización" — buscador con lista en vez de un
+   <select> plano, porque son 27 categorías y algunas con nombres
+   largos (ej. "Sistema avanzado de filtración y recirculación de
+   alto ahorro energético"), difíciles de ubicar en un desplegable
+   normal. El valor real sigue viviendo en itemQuoteCategorySelect
+   (ahora un <input type="hidden">, no un <select>, pero .value se
+   lee/escribe exactamente igual) — así el resto del código que ya
+   usaba itemQuoteCategorySelect.value no tuvo que cambiar. */
+const itemQuoteCategorySelect = document.getElementById('itemQuoteCategory');
+const itemQuoteCategorySearchInput = document.getElementById('itemQuoteCategorySearch');
+const itemQuoteCategoryListEl = document.getElementById('itemQuoteCategoryList');
+
+function setItemQuoteCategoryValue(id) {
+  const qc = QUOTE_CATEGORY_BY_ID[id];
+  itemQuoteCategorySelect.value = id || '';
+  itemQuoteCategorySearchInput.value = qc ? qc.label : '';
+}
+
+function renderItemQuoteCategoryList(query) {
+  const q = (query || '').trim().toLowerCase();
+  const matches = QUOTE_CATEGORIES.filter(qc => !q || qc.label.toLowerCase().includes(q));
+  itemQuoteCategoryListEl.innerHTML = '';
+  if (!matches.length) {
+    itemQuoteCategoryListEl.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">Sin resultados.</p>';
+  } else {
+    matches.forEach(qc => {
+      const opt = document.createElement('button');
+      opt.type = 'button';
+      const selected = qc.id === itemQuoteCategorySelect.value;
+      opt.className = 'w-full text-left text-xs px-3 py-2 hover:bg-sky-50 leading-snug ' + (selected ? 'bg-sky-50 text-sky-700 font-medium' : 'text-slate-700');
+      opt.textContent = qc.label;
+      // mousedown (no click) para que se dispare antes de que el blur del
+      // input oculte la lista y se pierda el clic.
+      opt.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        setItemQuoteCategoryValue(qc.id);
+        itemQuoteCategoryListEl.classList.add('hidden');
+      });
+      itemQuoteCategoryListEl.appendChild(opt);
+    });
+  }
+  itemQuoteCategoryListEl.classList.remove('hidden');
+}
+
+itemQuoteCategorySearchInput.addEventListener('focus', () => renderItemQuoteCategoryList(''));
+itemQuoteCategorySearchInput.addEventListener('input', () => renderItemQuoteCategoryList(itemQuoteCategorySearchInput.value));
+itemQuoteCategorySearchInput.addEventListener('blur', () => {
+  setTimeout(() => {
+    itemQuoteCategoryListEl.classList.add('hidden');
+    // Si quedó escrito algo que no es una categoría real, se vuelve a
+    // mostrar el texto de la categoría seleccionada de verdad.
+    const current = QUOTE_CATEGORY_BY_ID[itemQuoteCategorySelect.value];
+    itemQuoteCategorySearchInput.value = current ? current.label : '';
+  }, 150);
 });
 
 let itemModalMode = 'add';
@@ -3527,11 +3580,11 @@ function openItemModal(mode, categoryId, existingItem) {
     itemSublineInput.value = existingItem.subline || '';
     itemDescriptionInput.value = existingItem.description || '';
     itemPriceInput.value = existingItem.priceNoTax != null ? existingItem.priceNoTax : '';
-    itemQuoteCategorySelect.value = existingItem.quoteCategory || cat.quoteCategory;
+    setItemQuoteCategoryValue(existingItem.quoteCategory || cat.quoteCategory);
   } else {
     itemModalTitle.textContent = 'Agregar objeto';
     itemCodeDisplay.value = '';
-    itemQuoteCategorySelect.value = cat.quoteCategory;
+    setItemQuoteCategoryValue(cat.quoteCategory);
   }
   updateItemImagePreview();
   itemModal.classList.remove('hidden');
