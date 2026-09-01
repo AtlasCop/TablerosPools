@@ -17,6 +17,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 <style>
   html, body { height: 100%; margin: 0; overflow: hidden; }
   #boardWrap { touch-action: none; }
@@ -178,6 +181,7 @@
     <button id="tabBtnProductos" class="text-xs font-semibold px-4 py-2 border-b-2 border-sky-500 text-sky-600 transition-colors">Productos</button>
     <button id="tabBtnCotizaciones" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Panel Cotizaciones</button>
     <button id="tabBtnKanban" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero Kanban</button>
+    <button id="tabBtnTablero3D" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero 3D</button>
   </div>
 
   <!-- MAIN -->
@@ -322,6 +326,84 @@
       <div id="kanbanMembersBar" class="flex items-center gap-2 flex-wrap mt-3"></div>
     </div>
     <div id="kanbanColumnsWrap" class="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4"></div>
+  </div>
+
+  <!-- TABLERO 3D (planear la ubicación real de los equipos en el cuarto de máquinas) -->
+  <div id="viewTablero3D" class="hidden flex-1 flex flex-col min-h-0 bg-slate-50">
+    <div class="px-6 pt-4 pb-3 border-b border-slate-200 bg-white shrink-0">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 class="text-sm font-bold text-slate-700">Tablero 3D — cuarto de máquinas</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5 max-w-md">Define el tamaño real del cuarto, agrega los equipos y ajústalos con las flechas hasta que queden al tamaño y la posición reales.</p>
+        </div>
+        <button id="btn3DAddEquip" class="text-xs font-semibold px-3 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white flex items-center gap-1.5 shrink-0">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+          Agregar equipo
+        </button>
+      </div>
+      <div class="flex items-end gap-3 flex-wrap mt-3">
+        <div>
+          <label class="block text-[10px] font-medium text-slate-500 mb-1">Ancho (m)</label>
+          <input id="room3DWidth" type="number" min="1" max="30" step="0.1" value="4" class="w-20 text-sm border border-slate-200 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-medium text-slate-500 mb-1">Profundo (m)</label>
+          <input id="room3DDepth" type="number" min="1" max="30" step="0.1" value="3" class="w-20 text-sm border border-slate-200 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-medium text-slate-500 mb-1">Alto (m)</label>
+          <input id="room3DHeight" type="number" min="1" max="10" step="0.1" value="2.5" class="w-20 text-sm border border-slate-200 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <button id="btn3DApplyRoom" class="text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50 text-slate-600">Aplicar tamaño</button>
+
+        <div class="w-px h-7 bg-slate-200 mx-1"></div>
+
+        <div class="flex items-center gap-1">
+          <button id="btn3DModeMove" title="Mover" data-mode="translate" class="js-3d-mode-btn p-2 rounded border border-sky-300 bg-sky-50 text-sky-600">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="btn3DModeRotate" title="Girar" data-mode="rotate" class="js-3d-mode-btn p-2 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10a8 8 0 1 1 2 5.3" stroke-linecap="round"/><path d="M3 4v6h6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="btn3DModeScale" title="Escalar" data-mode="scale" class="js-3d-mode-btn p-2 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V4h16M4 20l6-6M14 20h6v-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+
+        <div class="w-px h-7 bg-slate-200 mx-1"></div>
+
+        <button id="btn3DViewTop" class="text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50 text-slate-600">Vista superior</button>
+        <button id="btn3DViewFree" class="text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50 text-slate-600">Vista libre</button>
+
+        <div class="flex-1"></div>
+
+        <button id="btn3DDeleteSelected" class="hidden text-xs px-3 py-2 rounded border border-red-200 text-red-500 hover:bg-red-50 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Eliminar
+        </button>
+      </div>
+    </div>
+
+    <div id="room3DWrap" class="flex-1 relative overflow-hidden bg-slate-200">
+      <div id="room3DHint" class="pointer-events-none absolute inset-0 flex items-center justify-center text-slate-400 text-sm text-center px-8 z-10">
+        Agrega un equipo para empezar a planear el cuarto de máquinas en 3D.
+      </div>
+      <div id="room3DSizeLabel" class="hidden absolute top-2 left-2 bg-slate-900/80 text-white text-[11px] rounded px-2 py-1 pointer-events-none z-10"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 3D EQUIPMENT PICKER MODAL -->
+<div id="picker3DModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]">
+    <div class="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+      <h3 class="text-sm font-bold text-slate-800">Agregar equipo al cuarto</h3>
+      <button id="picker3DModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="px-5 pb-3 shrink-0">
+      <input id="picker3DSearch" type="text" placeholder="Buscar por nombre, código o categoría…" class="w-full text-sm border border-slate-200 rounded px-3 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+    </div>
+    <div id="picker3DList" class="flex-1 overflow-y-auto px-5 pb-5 space-y-1.5"></div>
   </div>
 </div>
 
@@ -1463,13 +1545,16 @@ bindResizeHandle(document.getElementById('quotePanelResizeHandle'), quotePanel, 
 const viewProductos = document.getElementById('viewProductos');
 const viewCotizaciones = document.getElementById('viewCotizaciones');
 const viewKanban = document.getElementById('viewKanban');
+const viewTablero3D = document.getElementById('viewTablero3D');
 const tabBtnProductos = document.getElementById('tabBtnProductos');
 const tabBtnCotizaciones = document.getElementById('tabBtnCotizaciones');
 const tabBtnKanban = document.getElementById('tabBtnKanban');
+const tabBtnTablero3D = document.getElementById('tabBtnTablero3D');
 const TAB_VIEWS = {
   productos: { view: viewProductos, btn: tabBtnProductos },
   cotizaciones: { view: viewCotizaciones, btn: tabBtnCotizaciones },
   kanban: { view: viewKanban, btn: tabBtnKanban },
+  tablero3d: { view: viewTablero3D, btn: tabBtnTablero3D },
 };
 function setActiveTab(tab) {
   Object.entries(TAB_VIEWS).forEach(([key, { view, btn }]) => {
@@ -1483,6 +1568,7 @@ function setActiveTab(tab) {
   if (tab === 'productos') requestAnimationFrame(resizeCanvas);
   else if (tab === 'cotizaciones') renderQuotesPanel();
   else if (tab === 'kanban') refreshKanbanData();
+  else if (tab === 'tablero3d') requestAnimationFrame(activate3DRoom);
 }
 tabBtnProductos.addEventListener('click', () => {
   const alreadyOnProductos = !viewProductos.classList.contains('hidden');
@@ -1495,6 +1581,7 @@ tabBtnProductos.addEventListener('click', () => {
 });
 tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
 tabBtnKanban.addEventListener('click', () => setActiveTab('kanban'));
+tabBtnTablero3D.addEventListener('click', () => setActiveTab('tablero3d'));
 
 /* ---------------------------------------------------------
    DOCUMENTO DE COTIZACIÓN — versión elegante para el cliente:
@@ -2946,6 +3033,400 @@ itemForm.addEventListener('submit', (e) => {
     idbNextCode(itemModalCategoryId, cat.code).then(saveRecord);
   }
 });
+
+/* ---------------------------------------------------------
+   TABLERO 3D — planear la ubicación real de los equipos dentro del
+   cuarto de máquinas. Three.js r128 (build clásico + examples/js,
+   sin módulos ES, para mantener el mismo estilo "todo scripts
+   globales" del resto del archivo). Un cuarto rectangular con
+   medidas reales (metros) + cada equipo como una caja con su color
+   de categoría, seleccionable y manipulable con los gizmos de
+   THREE.TransformControls (mover/girar/escalar), igual que en un
+   editor 3D normal. Se guarda solo en este navegador (localStorage,
+   igual que "Mis tableros" del tablero 2D — no es dato compartido
+   en Supabase todavía).
+--------------------------------------------------------- */
+const EQUIP_BASE_SIZE = 0.4; // metros — caja genérica de 40cm antes de escalar
+const ROOM_3D_KEY = 'tablero_3d_room';
+
+let scene3D, camera3D, renderer3D, orbitControls3D, transformControls3D;
+let objectsGroup3D, roomGroup3D, raycaster3D, mouse3D;
+let selected3DGroup = null;
+let room3DDims = { width: 4, depth: 3, height: 2.5 };
+let is3DInitialized = false;
+let animating3D = false;
+let save3DTimeout = null;
+
+function makeTextSprite3D(text) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const fontSize = 40;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  const textWidth = ctx.measureText(text).width;
+  canvas.width = textWidth + 28;
+  canvas.height = fontSize + 20;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.fillStyle = 'rgba(15,23,42,0.85)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 14, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+  const scaleFactor = 0.0032;
+  sprite.scale.set(canvas.width * scaleFactor, canvas.height * scaleFactor, 1);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+function createEquipmentObject3D(item, savedTransform, overrideColor) {
+  const cat = item.categoryId ? CATEGORY_BY_ID[item.categoryId] : null;
+  const color = overrideColor || (cat && cat.color) || '#0ea5e9';
+  const label = item.name || 'Equipo';
+
+  const geometry = new THREE.BoxGeometry(EQUIP_BASE_SIZE, EQUIP_BASE_SIZE, EQUIP_BASE_SIZE);
+  const material = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.05 });
+  const box = new THREE.Mesh(geometry, material);
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geometry),
+    new THREE.LineBasicMaterial({ color: 0x0f172a, transparent: true, opacity: 0.25 })
+  );
+  box.add(edges);
+
+  const group = new THREE.Group();
+  group.add(box);
+  const sprite = makeTextSprite3D(label);
+  sprite.position.set(0, EQUIP_BASE_SIZE / 2 + 0.16, 0);
+  group.add(sprite);
+
+  group.userData.isEquipment = true;
+  group.userData.itemId = item.id;
+  group.userData.label = label;
+  group.userData.color = color;
+
+  if (savedTransform) {
+    group.position.set(savedTransform.position[0], savedTransform.position[1], savedTransform.position[2]);
+    group.rotation.y = savedTransform.rotationY || 0;
+    group.scale.set(savedTransform.scale[0], savedTransform.scale[1], savedTransform.scale[2]);
+  } else {
+    const n = objectsGroup3D.children.length;
+    const offsetX = ((n % 4) - 1.5) * 0.6;
+    const offsetZ = (Math.floor(n / 4) - 1) * 0.6;
+    group.position.set(offsetX, EQUIP_BASE_SIZE / 2, offsetZ);
+  }
+  objectsGroup3D.add(group);
+  return group;
+}
+
+function update3DSizeLabel() {
+  const lbl = document.getElementById('room3DSizeLabel');
+  if (!selected3DGroup) { lbl.classList.add('hidden'); return; }
+  const s = selected3DGroup.scale;
+  const w = Math.round(EQUIP_BASE_SIZE * s.x * 100);
+  const d = Math.round(EQUIP_BASE_SIZE * s.z * 100);
+  const h = Math.round(EQUIP_BASE_SIZE * s.y * 100);
+  lbl.textContent = `${selected3DGroup.userData.label} · ${w} × ${d} × ${h} cm`;
+  lbl.classList.remove('hidden');
+}
+
+function select3DObject(group) {
+  selected3DGroup = group;
+  transformControls3D.attach(group);
+  document.getElementById('btn3DDeleteSelected').classList.remove('hidden');
+  update3DSizeLabel();
+}
+function deselect3DObject() {
+  selected3DGroup = null;
+  transformControls3D.detach();
+  document.getElementById('btn3DDeleteSelected').classList.add('hidden');
+  document.getElementById('room3DSizeLabel').classList.add('hidden');
+}
+
+function handle3DSceneClick(e) {
+  const rect = renderer3D.domElement.getBoundingClientRect();
+  mouse3D.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse3D.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster3D.setFromCamera(mouse3D, camera3D);
+  const intersects = raycaster3D.intersectObjects(objectsGroup3D.children, true);
+  if (intersects.length) {
+    let obj = intersects[0].object;
+    while (obj.parent && !obj.userData.isEquipment) obj = obj.parent;
+    if (obj.userData.isEquipment) select3DObject(obj);
+  } else {
+    deselect3DObject();
+  }
+}
+
+function buildRoom3D() {
+  if (roomGroup3D) scene3D.remove(roomGroup3D);
+  roomGroup3D = new THREE.Group();
+  const w = room3DDims.width, d = room3DDims.depth, h = room3DDims.height;
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, side: THREE.DoubleSide })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  roomGroup3D.add(floor);
+
+  const grid = new THREE.GridHelper(Math.max(w, d), Math.max(2, Math.round(Math.max(w, d))), 0x94a3b8, 0xcbd5e1);
+  grid.position.y = 0.002;
+  roomGroup3D.add(grid);
+
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.12, side: THREE.DoubleSide });
+  const wallBack = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat.clone());
+  wallBack.position.set(0, h / 2, -d / 2);
+  roomGroup3D.add(wallBack);
+  const wallFront = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat.clone());
+  wallFront.position.set(0, h / 2, d / 2);
+  wallFront.rotation.y = Math.PI;
+  roomGroup3D.add(wallFront);
+  const wallLeft = new THREE.Mesh(new THREE.PlaneGeometry(d, h), wallMat.clone());
+  wallLeft.position.set(-w / 2, h / 2, 0);
+  wallLeft.rotation.y = Math.PI / 2;
+  roomGroup3D.add(wallLeft);
+  const wallRight = new THREE.Mesh(new THREE.PlaneGeometry(d, h), wallMat.clone());
+  wallRight.position.set(w / 2, h / 2, 0);
+  wallRight.rotation.y = -Math.PI / 2;
+  roomGroup3D.add(wallRight);
+
+  const boxEdges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)),
+    new THREE.LineBasicMaterial({ color: 0x38bdf8 })
+  );
+  boxEdges.position.set(0, h / 2, 0);
+  roomGroup3D.add(boxEdges);
+
+  scene3D.add(roomGroup3D);
+}
+
+function scheduleSave3D() {
+  clearTimeout(save3DTimeout);
+  save3DTimeout = setTimeout(save3DRoom, 400);
+}
+function save3DRoom() {
+  if (!is3DInitialized) return;
+  const objects = objectsGroup3D.children.map(g => ({
+    itemId: g.userData.itemId,
+    label: g.userData.label,
+    color: g.userData.color,
+    position: [g.position.x, g.position.y, g.position.z],
+    rotationY: g.rotation.y,
+    scale: [g.scale.x, g.scale.y, g.scale.z],
+  }));
+  const data = { width: room3DDims.width, depth: room3DDims.depth, height: room3DDims.height, objects };
+  try { localStorage.setItem(ROOM_3D_KEY, JSON.stringify(data)); } catch (e) { console.warn('No se pudo guardar el tablero 3D', e); }
+}
+function load3DRoom() {
+  let data;
+  try { data = JSON.parse(localStorage.getItem(ROOM_3D_KEY)); } catch { data = null; }
+  if (data) {
+    room3DDims = { width: data.width || 4, depth: data.depth || 3, height: data.height || 2.5 };
+  }
+  document.getElementById('room3DWidth').value = room3DDims.width;
+  document.getElementById('room3DDepth').value = room3DDims.depth;
+  document.getElementById('room3DHeight').value = room3DDims.height;
+  buildRoom3D();
+  (data && data.objects || []).forEach(o => {
+    const item = CUSTOM_ITEMS_BY_ID[o.itemId] || { id: o.itemId, name: o.label, categoryId: null };
+    createEquipmentObject3D(item, o, o.color);
+  });
+  document.getElementById('room3DHint').classList.toggle('hidden', objectsGroup3D.children.length > 0);
+}
+
+function resize3DRenderer() {
+  if (!is3DInitialized) return;
+  const wrap = document.getElementById('room3DWrap');
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  if (!w || !h) return;
+  renderer3D.setSize(w, h);
+  camera3D.aspect = w / h;
+  camera3D.updateProjectionMatrix();
+}
+
+function animate3D() {
+  if (viewTablero3D.classList.contains('hidden')) { animating3D = false; return; }
+  requestAnimationFrame(animate3D);
+  orbitControls3D.update();
+  renderer3D.render(scene3D, camera3D);
+}
+
+function init3DScene() {
+  if (is3DInitialized) return;
+  is3DInitialized = true;
+
+  const wrap = document.getElementById('room3DWrap');
+  scene3D = new THREE.Scene();
+  scene3D.background = new THREE.Color(0xcbd5e1);
+
+  camera3D = new THREE.PerspectiveCamera(50, 1, 0.05, 100);
+  camera3D.position.set(5, 4, 6);
+
+  renderer3D = new THREE.WebGLRenderer({ antialias: true });
+  renderer3D.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer3D.domElement.style.display = 'block';
+  wrap.appendChild(renderer3D.domElement);
+
+  scene3D.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+  dirLight.position.set(6, 10, 4);
+  scene3D.add(dirLight);
+  const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+  dirLight2.position.set(-6, 6, -4);
+  scene3D.add(dirLight2);
+
+  objectsGroup3D = new THREE.Group();
+  scene3D.add(objectsGroup3D);
+
+  orbitControls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
+  orbitControls3D.target.set(0, 0.8, 0);
+  orbitControls3D.enableDamping = true;
+  orbitControls3D.dampingFactor = 0.08;
+  orbitControls3D.maxPolarAngle = Math.PI / 2 - 0.02;
+
+  transformControls3D = new THREE.TransformControls(camera3D, renderer3D.domElement);
+  scene3D.add(transformControls3D);
+  transformControls3D.addEventListener('dragging-changed', (event) => {
+    orbitControls3D.enabled = !event.value;
+    if (!event.value) scheduleSave3D();
+  });
+  transformControls3D.addEventListener('objectChange', () => {
+    if (!selected3DGroup) return;
+    const halfH = (EQUIP_BASE_SIZE * selected3DGroup.scale.y) / 2;
+    if (selected3DGroup.position.y < halfH) selected3DGroup.position.y = halfH;
+    update3DSizeLabel();
+  });
+
+  raycaster3D = new THREE.Raycaster();
+  mouse3D = new THREE.Vector2();
+
+  let down3DX = 0, down3DY = 0;
+  renderer3D.domElement.addEventListener('pointerdown', (e) => { down3DX = e.clientX; down3DY = e.clientY; });
+  renderer3D.domElement.addEventListener('pointerup', (e) => {
+    if (transformControls3D.dragging) return;
+    if (Math.hypot(e.clientX - down3DX, e.clientY - down3DY) > 4) return;
+    handle3DSceneClick(e);
+  });
+
+  load3DRoom();
+  window.addEventListener('resize', resize3DRenderer);
+}
+
+function activate3DRoom() {
+  init3DScene();
+  resize3DRenderer();
+  if (!animating3D) { animating3D = true; animate3D(); }
+}
+
+/* Toolbar — los listeners se registran una sola vez al cargar la
+   página; solo se disparan de verdad cuando el usuario ya visitó la
+   pestaña (así que la escena 3D ya está inicializada). */
+document.querySelectorAll('.js-3d-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    transformControls3D.setMode(btn.dataset.mode);
+    document.querySelectorAll('.js-3d-mode-btn').forEach(b => {
+      const active = b === btn;
+      b.classList.toggle('border-sky-300', active);
+      b.classList.toggle('bg-sky-50', active);
+      b.classList.toggle('text-sky-600', active);
+      b.classList.toggle('border-slate-200', !active);
+      b.classList.toggle('text-slate-500', !active);
+    });
+  });
+});
+document.getElementById('btn3DViewTop').addEventListener('click', () => {
+  const maxDim = Math.max(room3DDims.width, room3DDims.depth) * 1.3;
+  camera3D.position.set(0, maxDim, 0.01);
+  orbitControls3D.target.set(0, 0, 0);
+  orbitControls3D.update();
+});
+document.getElementById('btn3DViewFree').addEventListener('click', () => {
+  const maxDim = Math.max(room3DDims.width, room3DDims.depth, room3DDims.height);
+  camera3D.position.set(maxDim * 1.1, maxDim * 0.9, maxDim * 1.3);
+  orbitControls3D.target.set(0, room3DDims.height / 3, 0);
+  orbitControls3D.update();
+});
+document.getElementById('btn3DApplyRoom').addEventListener('click', () => {
+  const w = Math.max(1, Math.min(30, Number(document.getElementById('room3DWidth').value) || 4));
+  const d = Math.max(1, Math.min(30, Number(document.getElementById('room3DDepth').value) || 3));
+  const h = Math.max(1, Math.min(10, Number(document.getElementById('room3DHeight').value) || 2.5));
+  room3DDims = { width: w, depth: d, height: h };
+  buildRoom3D();
+  save3DRoom();
+});
+document.getElementById('btn3DDeleteSelected').addEventListener('click', () => {
+  if (!selected3DGroup) return;
+  transformControls3D.detach();
+  objectsGroup3D.remove(selected3DGroup);
+  selected3DGroup.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  });
+  selected3DGroup = null;
+  document.getElementById('btn3DDeleteSelected').classList.add('hidden');
+  document.getElementById('room3DSizeLabel').classList.add('hidden');
+  document.getElementById('room3DHint').classList.toggle('hidden', objectsGroup3D.children.length > 0);
+  save3DRoom();
+});
+document.addEventListener('keydown', (e) => {
+  if (!is3DInitialized || viewTablero3D.classList.contains('hidden')) return;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'g' || e.key === 'G') document.getElementById('btn3DModeMove').click();
+  else if (e.key === 'r' || e.key === 'R') document.getElementById('btn3DModeRotate').click();
+  else if (e.key === 's' || e.key === 'S') document.getElementById('btn3DModeScale').click();
+  else if (e.key === 'Delete' && selected3DGroup) document.getElementById('btn3DDeleteSelected').click();
+});
+
+/* Selector de equipo para agregar al cuarto */
+const picker3DModal = document.getElementById('picker3DModal');
+function renderPicker3DList(query) {
+  const q = query.trim().toLowerCase();
+  const list = document.getElementById('picker3DList');
+  const items = Object.values(CUSTOM_ITEMS_BY_ID).filter(it => {
+    if (!q) return true;
+    const cat = CATEGORY_BY_ID[it.categoryId];
+    return (it.name || '').toLowerCase().includes(q) ||
+      (it.code || '').toLowerCase().includes(q) ||
+      (cat && cat.label.toLowerCase().includes(q));
+  }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  list.innerHTML = '';
+  if (!items.length) {
+    list.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">${q ? 'Sin resultados.' : 'Aún no hay objetos en el inventario. Agrégalos desde la pestaña Productos.'}</p>`;
+    return;
+  }
+  items.forEach(it => {
+    const cat = CATEGORY_BY_ID[it.categoryId];
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200';
+    row.innerHTML = `
+      <span class="w-3 h-3 rounded-full shrink-0" style="background:${cat ? cat.color : '#0ea5e9'}"></span>
+      <span class="flex-1 min-w-0">
+        <span class="block text-xs font-medium text-slate-700 truncate">${escapeHtml(it.name)}</span>
+        <span class="block text-[10px] text-slate-400 truncate">${escapeHtml(it.code)} · ${cat ? escapeHtml(cat.label) : ''}</span>
+      </span>
+    `;
+    row.addEventListener('click', () => {
+      const group = createEquipmentObject3D(it);
+      select3DObject(group);
+      document.getElementById('room3DHint').classList.add('hidden');
+      save3DRoom();
+      picker3DModal.classList.add('hidden');
+    });
+    list.appendChild(row);
+  });
+}
+document.getElementById('btn3DAddEquip').addEventListener('click', () => {
+  document.getElementById('picker3DSearch').value = '';
+  renderPicker3DList('');
+  picker3DModal.classList.remove('hidden');
+  document.getElementById('picker3DSearch').focus();
+});
+document.getElementById('picker3DModalClose').addEventListener('click', () => picker3DModal.classList.add('hidden'));
+picker3DModal.addEventListener('click', (e) => { if (e.target === picker3DModal) picker3DModal.classList.add('hidden'); });
+document.getElementById('picker3DSearch').addEventListener('input', (e) => renderPicker3DList(e.target.value));
 </script>
 </body>
 </html>
