@@ -22,6 +22,7 @@ create table if not exists items (
 create index if not exists items_category_idx on items ("categoryId");
 -- Por si la tabla ya existía de una corrida anterior de este script:
 alter table items add column if not exists "image3DDataUrl" text;
+alter table items add column if not exists "datasheetUrl" text;
 
 -- Contador para el código autoincremental por categoría (ej. MB-0001)
 create table if not exists counters (

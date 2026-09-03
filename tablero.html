@@ -737,6 +737,15 @@
         </div>
         <p class="text-[10px] text-slate-400 mt-1">En qué sección de la cotización aparece este objeto al arrastrarlo al tablero. Se sugiere una por defecto, pero puedes cambiarla.</p>
       </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Ficha técnica (enlace)</label>
+        <div class="flex gap-1.5">
+          <input id="itemDatasheetUrl" type="url" placeholder="Pega la URL y presiona Verificar" class="flex-1 min-w-0 text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+          <button type="button" id="itemDatasheetCheckBtn" class="shrink-0 text-xs px-2.5 py-2 rounded border border-slate-200 text-slate-600 hover:bg-slate-50">Verificar</button>
+        </div>
+        <p id="itemDatasheetStatus" class="hidden text-[10px] mt-1"></p>
+        <a id="itemDatasheetOpenLink" href="#" target="_blank" rel="noopener" class="hidden text-[10px] text-sky-600 hover:underline mt-1 inline-block">Abrir enlace actual ↗</a>
+      </div>
       <p id="itemFormError" class="hidden text-xs text-red-500"></p>
       <div class="flex gap-2 pt-1">
         <button type="button" id="itemModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
@@ -3615,7 +3624,95 @@ const itemNameInput = document.getElementById('itemName');
 const itemSublineInput = document.getElementById('itemSubline');
 const itemDescriptionInput = document.getElementById('itemDescription');
 const itemPriceInput = document.getElementById('itemPrice');
+const itemDatasheetUrlInput = document.getElementById('itemDatasheetUrl');
+const itemDatasheetCheckBtn = document.getElementById('itemDatasheetCheckBtn');
+const itemDatasheetStatus = document.getElementById('itemDatasheetStatus');
+const itemDatasheetOpenLink = document.getElementById('itemDatasheetOpenLink');
 const itemFormError = document.getElementById('itemFormError');
+
+/* ---------------------------------------------------------
+   FICHA TÉCNICA — valida que el enlace tenga forma de URL, intenta
+   confirmar que el dominio responde, y lo acorta con TinyURL
+   (servicio público, sin cuenta ni llave — a diferencia de otros
+   acortadores gratuitos como is.gd, TinyURL sí envía las cabeceras
+   CORS necesarias para poder llamarlo desde el navegador; se probó
+   directamente antes de usarlo). Importante: desde el navegador no
+   se puede leer el código de respuesta real de un sitio externo
+   (reglas de CORS), así que "verificar que funcione" aquí es mejor
+   esfuerzo — detecta dominios que no existen o no responden, pero no
+   distingue una página real de un error 404 en un dominio que sí
+   existe.
+--------------------------------------------------------- */
+function setDatasheetStatus(kind, text) {
+  itemDatasheetStatus.textContent = text;
+  itemDatasheetStatus.classList.remove('hidden', 'text-emerald-600', 'text-amber-600', 'text-red-500', 'text-slate-400');
+  itemDatasheetStatus.classList.add(
+    kind === 'ok' ? 'text-emerald-600' : kind === 'warn' ? 'text-amber-600' : kind === 'error' ? 'text-red-500' : 'text-slate-400'
+  );
+}
+function updateDatasheetOpenLink() {
+  const url = itemDatasheetUrlInput.value.trim();
+  itemDatasheetOpenLink.classList.toggle('hidden', !url);
+  if (url) itemDatasheetOpenLink.href = url;
+}
+function checkAndShortenDatasheetUrl() {
+  const raw = itemDatasheetUrlInput.value.trim();
+  itemDatasheetStatus.classList.add('hidden');
+  if (!raw) return;
+
+  let url;
+  try {
+    url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocolo no soportado');
+  } catch {
+    setDatasheetStatus('error', '✗ Ese enlace no es válido — debe empezar por http:// o https://');
+    return;
+  }
+
+  if (/^https?:\/\/tinyurl\.com\//i.test(url.href)) {
+    setDatasheetStatus('ok', '✓ Enlace ya acortado.');
+    updateDatasheetOpenLink();
+    return;
+  }
+
+  setDatasheetStatus('neutral', 'Verificando enlace…');
+  itemDatasheetCheckBtn.disabled = true;
+
+  const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('tiempo agotado')), ms));
+
+  // "no-cors": no deja leer el estado real de la respuesta, pero si el
+  // dominio no existe o rechaza la conexión, fetch() sí rechaza — eso
+  // es lo único verificable desde el navegador contra un sitio externo.
+  Promise.race([fetch(url.href, { mode: 'no-cors', cache: 'no-store' }), timeout(6000)])
+    .then(() => true)
+    .catch(() => false)
+    .then(reachable => {
+      if (!reachable) {
+        setDatasheetStatus('warn', '⚠ No se pudo confirmar que el enlace responda (algunos sitios bloquean esta verificación) — se guardó tal como lo pegaste.');
+        updateDatasheetOpenLink();
+        return;
+      }
+      return Promise.race([fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(url.href)), timeout(6000)])
+        .then(res => res.ok ? res.text() : Promise.reject())
+        .then(shortText => {
+          const shortUrl = shortText.trim();
+          if (/^https:\/\/tinyurl\.com\//i.test(shortUrl)) {
+            itemDatasheetUrlInput.value = shortUrl;
+            setDatasheetStatus('ok', '✓ Enlace verificado y acortado.');
+          } else {
+            setDatasheetStatus('ok', '✓ Enlace verificado (no se pudo acortar, se dejó tal como lo pegaste).');
+          }
+          updateDatasheetOpenLink();
+        })
+        .catch(() => {
+          setDatasheetStatus('ok', '✓ Enlace verificado (no se pudo acortar, se dejó tal como lo pegaste).');
+          updateDatasheetOpenLink();
+        });
+    })
+    .finally(() => { itemDatasheetCheckBtn.disabled = false; });
+}
+itemDatasheetCheckBtn.addEventListener('click', checkAndShortenDatasheetUrl);
+itemDatasheetUrlInput.addEventListener('input', updateDatasheetOpenLink);
 
 /* "Categoría en la cotización" — buscador con lista en vez de un
    <select> plano, porque son 27 categorías y algunas con nombres
@@ -3700,6 +3797,7 @@ function openItemModal(mode, categoryId, existingItem) {
   hideBgStatusMessages();
   document.getElementById('itemUseOriginalBtn').classList.add('hidden');
   itemForm.reset();
+  itemDatasheetStatus.classList.add('hidden');
 
   const cat = CATEGORY_BY_ID[categoryId];
   if (mode === 'edit' && existingItem) {
@@ -3709,12 +3807,15 @@ function openItemModal(mode, categoryId, existingItem) {
     itemSublineInput.value = existingItem.subline || '';
     itemDescriptionInput.value = existingItem.description || '';
     itemPriceInput.value = existingItem.priceNoTax != null ? existingItem.priceNoTax : '';
+    itemDatasheetUrlInput.value = existingItem.datasheetUrl || '';
     setItemQuoteCategoryValueSilently(existingItem.quoteCategory || cat.quoteCategory);
   } else {
     itemModalTitle.textContent = 'Agregar objeto';
     itemCodeDisplay.value = '';
+    itemDatasheetUrlInput.value = '';
     setItemQuoteCategoryValueSilently(cat.quoteCategory);
   }
+  updateDatasheetOpenLink();
   updateItemImagePreview();
   itemModal.classList.remove('hidden');
 }
@@ -3968,6 +4069,7 @@ itemForm.addEventListener('submit', (e) => {
   const subline = itemSublineInput.value.trim();
   const description = itemDescriptionInput.value.trim();
   const priceNoTax = itemPriceInput.value === '' ? null : Number(itemPriceInput.value);
+  const datasheetUrl = itemDatasheetUrlInput.value.trim() || null;
   const quoteCategory = itemQuoteCategorySelect.value;
   const cat = CATEGORY_BY_ID[itemModalCategoryId];
 
@@ -3981,6 +4083,7 @@ itemForm.addEventListener('submit', (e) => {
     record.priceNoTax = priceNoTax;
     record.imageDataUrl = itemModalImageDataUrl;
     record.quoteCategory = quoteCategory;
+    record.datasheetUrl = datasheetUrl;
 
     // Solo se reprocesa la versión cuadrada para 3D si la foto cambió en
     // este formulario, o si el objeto todavía no tenía una (por ejemplo,
