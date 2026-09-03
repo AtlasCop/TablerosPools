@@ -1999,6 +1999,9 @@ document.getElementById('quotePanelToggleArrow').addEventListener('click', toggl
 btnQuoteToggle.addEventListener('click', toggleQuotePanel);
 applyStoredWidth(quotePanel, 'quotePanel', 220, 620);
 bindResizeHandle(document.getElementById('quotePanelResizeHandle'), quotePanel, { min: 220, max: 620, sign: -1, storageKey: 'quotePanel' });
+// Empieza colapsado en cada carga de la página — se abre a mano con la
+// flecha o el botón "Cotización" cuando se necesite.
+toggleQuotePanel();
 
 /* ---------------------------------------------------------
    PESTAÑAS DE VISTA: "Productos" (todo el flujo de armar el
