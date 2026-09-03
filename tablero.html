@@ -1045,10 +1045,6 @@ function requireAuthAndRole() {
   }).catch((err) => { console.warn('Acceso no confirmado:', err && err.message); });
 }
 requireAuthAndRole();
-
-function idbGetItemsForCategory(categoryId) {
-  return sb.from('items').select('*').eq('categoryId', categoryId).order('createdAt', { ascending: true }).then(sbResult);
-}
 function idbPutItem(item) {
   return sb.from('items').upsert(item).then(sbResult).then(() => item);
 }
@@ -1150,6 +1146,12 @@ const CUSTOM_ITEMS_BY_ID = {};
 idbGetAllItems().then(items => {
   items.forEach(it => { CUSTOM_ITEMS_BY_ID[it.id] = it; });
   rebuildQuote();
+  // renderInventory()/renderInventoryTable() ya se llamaron una vez al
+  // cargar la página, antes de que esta consulta terminara — se vuelven a
+  // llamar aquí para que la categoría/tabla que se esté viendo se actualice
+  // con el inventario completo apenas está disponible.
+  renderInventory();
+  renderInventoryTable();
 });
 
 /* ---------------------------------------------------------
@@ -1530,15 +1532,16 @@ function renderInventory() {
     invGrid.appendChild(card);
   });
 
-  idbGetItemsForCategory(cat.id).then(customItems => {
-    if (cat.id !== activeCat) return; // user already switched categories
-    currentCategoryCustomItems = customItems;
-    // CUSTOM_ITEMS_BY_ID already has every item (loaded once at startup) —
-    // just refresh these specific records in case they changed elsewhere.
-    customItems.forEach(dbItem => { CUSTOM_ITEMS_BY_ID[dbItem.id] = dbItem; });
-    updatePriceRangeBounds(customItems);
-    renderCustomItemCards();
-  });
+  // Se lee directamente de CUSTOM_ITEMS_BY_ID (la caché completa en memoria,
+  // sincronizada en cada guardado/eliminación) en vez de volver a consultar
+  // la base de datos por categoría cada vez — antes hacía una consulta aparte
+  // aquí, y en ciertos casos esa consulta no traía de vuelta un objeto recién
+  // creado aunque sí existiera en la base de datos (se veía bien en la
+  // pestaña Inventario, que sí usa esta misma caché, pero no aquí). Usar la
+  // misma fuente de datos en los dos lugares evita que se puedan desincronizar.
+  currentCategoryCustomItems = Object.values(CUSTOM_ITEMS_BY_ID).filter(dbItem => dbItem.categoryId === cat.id);
+  updatePriceRangeBounds(currentCategoryCustomItems);
+  renderCustomItemCards();
 }
 
 /* Buscador (código / sublínea / descripción) + rango de precio sin IVA —
