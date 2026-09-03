@@ -2214,45 +2214,76 @@ function escapeHtml(str) {
 function firstNameOf(fullName) { return (fullName || '').trim().split(/\s+/)[0] || ''; }
 function greeting(fullName) { const n = firstNameOf(fullName); return n ? `Hola ${n}` : 'Hola'; }
 
-function buildQuoteDocHTML() {
-  const clientName = document.getElementById('quoteClientName').value.trim();
-  const clientCompany = document.getElementById('quoteClientCompany').value.trim();
-  const clientPhone = document.getElementById('quoteClientPhone').value.trim();
-  const clientEmail = document.getElementById('quoteClientEmail').value.trim();
-  const clientProject = document.getElementById('quoteClientProject').value.trim();
-  const clientNote = document.getElementById('quoteClientNote').value.trim();
+/* Construye el documento de cotización (HTML para la vista previa en
+   vivo, y para el PDF que se genera a partir de él con html2canvas).
+   Sin argumentos: lee los campos del formulario y el tablero 2D en
+   vivo, como siempre. Con un "snapshot" (una cotización ya guardada
+   del historial, tal como vive en la tabla "quotes"): reconstruye el
+   mismo documento a partir de esa foto guardada, sin tocar el
+   tablero — así se puede volver a descargar el PDF de una cotización
+   pasada desde Panel Cotizaciones, tal como quedó en ese momento. */
+function buildQuoteDocHTML(snapshot) {
+  let clientName, clientCompany, clientPhone, clientEmail, clientProject, clientNote, categoriesData, grandTotal, docDate;
 
-  const byCategory = computeQuoteByCategory();
-  let grandTotal = 0;
+  if (snapshot) {
+    clientName = snapshot.clientName || '';
+    clientCompany = snapshot.clientCompany || '';
+    clientPhone = snapshot.clientPhone || '';
+    clientEmail = snapshot.clientEmail || '';
+    clientProject = snapshot.clientProject || '';
+    clientNote = snapshot.clientNote || '';
+    categoriesData = snapshot.categories || [];
+    grandTotal = snapshot.grandTotal || 0;
+    docDate = new Date(snapshot.createdAt || Date.now());
+  } else {
+    clientName = document.getElementById('quoteClientName').value.trim();
+    clientCompany = document.getElementById('quoteClientCompany').value.trim();
+    clientPhone = document.getElementById('quoteClientPhone').value.trim();
+    clientEmail = document.getElementById('quoteClientEmail').value.trim();
+    clientProject = document.getElementById('quoteClientProject').value.trim();
+    clientNote = document.getElementById('quoteClientNote').value.trim();
+
+    const byCategory = computeQuoteByCategory();
+    grandTotal = 0;
+    categoriesData = [];
+    QUOTE_CATEGORIES.forEach(qc => {
+      const rows = byCategory[qc.id];
+      if (!rows || !rows.length) return;
+      let subtotal = 0;
+      const items = rows.map(({ dbItem, qty }) => {
+        const unit = dbItem.priceNoTax || 0;
+        const total = unit * qty;
+        subtotal += total;
+        return { code: dbItem.code, name: dbItem.name, subline: dbItem.subline || '', qty, unit, total, imageDataUrl: dbItem.imageDataUrl || null };
+      });
+      grandTotal += subtotal;
+      categoriesData.push({ label: qc.label, subtotal, items, isOptional: qc.label.toLowerCase().includes('(opcional)') });
+    });
+    docDate = new Date();
+  }
+
   let categoriesHtml = '';
-  QUOTE_CATEGORIES.forEach(qc => {
-    const rows = byCategory[qc.id];
-    if (!rows || !rows.length) return;
-    const isOptional = qc.label.toLowerCase().includes('(opcional)');
-    let subtotal = 0;
-    const rowsHtml = rows.map(({ dbItem, qty }) => {
-      const unit = dbItem.priceNoTax || 0;
-      const total = unit * qty;
-      subtotal += total;
-      const img = dbItem.imageDataUrl
-        ? `<img src="${dbItem.imageDataUrl}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;border:1px solid #e2e8f0;" />`
+  categoriesData.forEach(cat => {
+    const isOptional = cat.isOptional != null ? cat.isOptional : cat.label.toLowerCase().includes('(opcional)');
+    const rowsHtml = cat.items.map(it => {
+      const img = it.imageDataUrl
+        ? `<img src="${it.imageDataUrl}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;border:1px solid #e2e8f0;" />`
         : `<div style="width:32px;height:32px;border-radius:6px;background:#f1f5f9;"></div>`;
       return `<tr style="border-top:1px solid #f1f5f9;">
         <td style="padding:6px 8px;">${img}</td>
-        <td style="padding:6px 8px;color:#64748b;font-family:monospace;font-size:10px;white-space:nowrap;">${escapeHtml(dbItem.code)}</td>
+        <td style="padding:6px 8px;color:#64748b;font-family:monospace;font-size:10px;white-space:nowrap;">${escapeHtml(it.code)}</td>
         <td style="padding:6px 8px;">
-          <div style="font-weight:600;">${escapeHtml(dbItem.name)}</div>
-          ${dbItem.subline ? `<div style="font-size:9px;color:#94a3b8;">${escapeHtml(dbItem.subline)}</div>` : ''}
+          <div style="font-weight:600;">${escapeHtml(it.name)}</div>
+          ${it.subline ? `<div style="font-size:9px;color:#94a3b8;">${escapeHtml(it.subline)}</div>` : ''}
         </td>
-        <td style="padding:6px 8px;text-align:center;">${qty}</td>
-        <td style="padding:6px 8px;text-align:right;color:#64748b;white-space:nowrap;">${formatCOP(unit)}</td>
-        <td style="padding:6px 8px;text-align:right;font-weight:bold;white-space:nowrap;">${formatCOP(total)}</td>
+        <td style="padding:6px 8px;text-align:center;">${it.qty}</td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b;white-space:nowrap;">${formatCOP(it.unit)}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:bold;white-space:nowrap;">${formatCOP(it.total)}</td>
       </tr>`;
     }).join('');
-    grandTotal += subtotal;
     categoriesHtml += `
       <div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
-        <div style="background:${isOptional ? '#fb923c' : '#38bdf8'};color:#fff;font-weight:bold;font-size:11px;text-transform:uppercase;padding:9px 14px;">${escapeHtml(qc.label)}</div>
+        <div style="background:${isOptional ? '#fb923c' : '#38bdf8'};color:#fff;font-weight:bold;font-size:11px;text-transform:uppercase;padding:9px 14px;">${escapeHtml(cat.label)}</div>
         <table style="width:100%;border-collapse:collapse;font-size:11px;">
           <thead>
             <tr style="background:#f8fafc;color:#64748b;font-size:9px;text-transform:uppercase;">
@@ -2266,7 +2297,7 @@ function buildQuoteDocHTML() {
           </thead>
           <tbody>${rowsHtml}</tbody>
         </table>
-        <div style="text-align:right;padding:8px 14px;background:#f8fafc;font-size:11px;font-weight:bold;color:#475569;">Subtotal: ${formatCOP(subtotal)}</div>
+        <div style="text-align:right;padding:8px 14px;background:#f8fafc;font-size:11px;font-weight:bold;color:#475569;">Subtotal: ${formatCOP(cat.subtotal)}</div>
       </div>`;
   });
 
@@ -2274,9 +2305,8 @@ function buildQuoteDocHTML() {
     categoriesHtml = `<div style="text-align:center;padding:40px 10px;color:#94a3b8;font-size:13px;">Aún no has agregado objetos con precio al tablero.</div>`;
   }
 
-  const today = new Date();
-  const fechaStr = today.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
-  const quoteNumber = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}-${String(today.getHours()).padStart(2, '0')}${String(today.getMinutes()).padStart(2, '0')}`;
+  const fechaStr = docDate.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+  const quoteNumber = `${docDate.getFullYear()}${String(docDate.getMonth() + 1).padStart(2, '0')}${String(docDate.getDate()).padStart(2, '0')}-${String(docDate.getHours()).padStart(2, '0')}${String(docDate.getMinutes()).padStart(2, '0')}`;
 
   return `
     <div style="font-family: Arial, Helvetica, sans-serif; color:#1e293b; width:800px;">
@@ -2364,13 +2394,27 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !quoteDo
   document.getElementById(id).addEventListener('input', renderQuoteDocPreview);
 });
 
-/* Objetos del tablero que tienen ficha técnica (enlace), en el mismo
-   orden en que aparecen en la cotización, sin repetir uno que salga
-   en más de una categoría. */
-function collectDatasheetItems() {
-  const byCategory = computeQuoteByCategory();
+/* Objetos con ficha técnica (enlace), sin repetir uno que salga en
+   más de una categoría. Sin argumentos: lee el tablero 2D en vivo,
+   como siempre. Con un "snapshot" (una cotización guardada): los saca
+   de esa foto guardada en vez del tablero — así el PDF de una
+   cotización pasada incluye la misma tabla de fichas técnicas que
+   tenía en ese momento, sin depender de qué haya en el tablero ahora. */
+function collectDatasheetItems(snapshot) {
   const seen = new Set();
   const items = [];
+  if (snapshot) {
+    (snapshot.categories || []).forEach(cat => {
+      (cat.items || []).forEach(it => {
+        if (it.datasheetUrl && !seen.has(it.code)) {
+          seen.add(it.code);
+          items.push(it);
+        }
+      });
+    });
+    return items;
+  }
+  const byCategory = computeQuoteByCategory();
   QUOTE_CATEGORIES.forEach(qc => {
     const rows = byCategory[qc.id];
     if (!rows) return;
@@ -2388,9 +2432,11 @@ function collectDatasheetItems() {
    diferencia del resto del documento (una imagen rasterizada con
    html2canvas), esta hoja se dibuja con las funciones de texto de
    jsPDF directamente, para que los enlaces queden de verdad clicables
-   en el PDF (textWithLink), no solo texto dentro de una imagen. */
-function addDatasheetsPage(pdf) {
-  const items = collectDatasheetItems();
+   en el PDF (textWithLink), no solo texto dentro de una imagen.
+   "items" ya viene resuelto (ver collectDatasheetItems) — así esta
+   función no necesita saber si viene del tablero en vivo o de una
+   cotización guardada. */
+function addDatasheetsPage(pdf, items) {
   if (!items.length) return;
 
   // Hoja horizontal (landscape) para esta tabla en particular — jsPDF
@@ -2454,9 +2500,25 @@ function addDatasheetsPage(pdf) {
   });
 }
 
-function generateQuotePdf() {
-  const preview = document.getElementById('quoteDocPreview');
+/* Sin argumentos: genera el PDF a partir del formulario y el tablero
+   2D en vivo (Descargar/Correo/WhatsApp desde el modal "Generar
+   cotización"). Con un "snapshot" (una cotización guardada del
+   historial): reconstruye el documento en un contenedor temporal
+   fuera de pantalla (no se toca el tablero ni el modal en vivo),
+   para poder volver a descargar el PDF de cualquier cotización pasada
+   desde Panel Cotizaciones tal como quedó guardada. */
+function generateQuotePdf(snapshot) {
+  let preview = document.getElementById('quoteDocPreview');
+  let tempContainer = null;
+  if (snapshot) {
+    tempContainer = document.createElement('div');
+    tempContainer.style.cssText = 'position:fixed; left:-10000px; top:0; width:800px; background:#fff;';
+    tempContainer.innerHTML = buildQuoteDocHTML(snapshot);
+    document.body.appendChild(tempContainer);
+    preview = tempContainer;
+  }
   return html2canvas(preview, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(canvas => {
+    if (tempContainer) tempContainer.remove();
     const imgData = canvas.toDataURL('image/jpeg', 0.92);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
@@ -2474,14 +2536,14 @@ function generateQuotePdf() {
       pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
     }
-    addDatasheetsPage(pdf);
+    addDatasheetsPage(pdf, collectDatasheetItems(snapshot));
     return pdf;
   });
 }
 
-function quotePdfFileName() {
-  const name = (document.getElementById('quoteClientName').value.trim() || 'cliente').replace(/\s+/g, '_');
-  return `Cotizacion_${name}.pdf`;
+function quotePdfFileName(clientName) {
+  const name = (clientName != null ? clientName : document.getElementById('quoteClientName').value.trim()) || 'cliente';
+  return `Cotizacion_${name.trim().replace(/\s+/g, '_')}.pdf`;
 }
 
 function withBusyButton(btn, busyLabel, fn) {
@@ -2523,10 +2585,18 @@ function currentQuoteSnapshot() {
       const unit = dbItem.priceNoTax || 0;
       const total = unit * qty;
       subtotal += total;
-      return { code: dbItem.code, name: dbItem.name, subline: dbItem.subline || '', qty, unit, total };
+      return {
+        code: dbItem.code, name: dbItem.name, subline: dbItem.subline || '', qty, unit, total,
+        // Se guarda una copia de la foto y la ficha técnica (no solo una
+        // referencia al objeto del inventario) para que volver a generar
+        // el PDF de esta cotización más adelante se vea igual de completo
+        // aunque el objeto original se edite o se borre del inventario.
+        imageDataUrl: dbItem.imageDataUrl || null,
+        datasheetUrl: dbItem.datasheetUrl || null,
+      };
     });
     grandTotal += subtotal;
-    categories.push({ label: qc.label, subtotal, items });
+    categories.push({ label: qc.label, subtotal, items, isOptional: qc.label.toLowerCase().includes('(opcional)') });
   });
 
   const ownerId = document.getElementById('quoteOwnerSelect').value || null;
@@ -2553,8 +2623,38 @@ function currentQuoteSnapshot() {
   };
 }
 
+/* Al generar una cotización con un responsable asignado, se crea (o
+   actualiza, si ya existía) una tarea en el tablero Kanban para esa
+   misma persona, en la columna "Por hacer" — así queda un recordatorio
+   de seguimiento sin depender de que alguien se acuerde de crearlo a
+   mano. El id de la tarea se deriva del id de la cotización a propósito:
+   generar la misma cotización varias veces en una sola sesión
+   (Descargar, luego también por Correo, etc.) actualiza esa misma
+   tarea en vez de crear una nueva cada vez. Sin responsable asignado
+   no hay a quién ponerle la tarea, así que no se crea ninguna. */
+function createKanbanTaskForQuote(quote) {
+  if (!quote.ownerId) return Promise.resolve();
+  const dueDate = new Date((quote.createdAt || Date.now()) + QUOTE_ALERT_DAYS * 86400000).toISOString().slice(0, 10);
+  const task = {
+    id: 'task_quote_' + quote.id,
+    title: `Dar seguimiento a cotización — ${quote.clientName || 'cliente sin nombre'}`,
+    description: `Cotización de "${quote.boardName}" por ${formatCOP(quote.grandTotal)} — tarea creada automáticamente al generar la cotización.`,
+    assigneeId: quote.ownerId,
+    priority: 'media',
+    dueDate,
+    column: 'todo',
+    createdAt: Date.now(),
+  };
+  return idbPutTask(task);
+}
+
 function saveGeneratedQuote() {
-  return idbPutQuote(currentQuoteSnapshot()).then(renderQuotesPanel);
+  const snapshot = currentQuoteSnapshot();
+  return idbPutQuote(snapshot)
+    .then(() => createKanbanTaskForQuote(snapshot).catch((err) =>
+      console.warn('No se pudo crear la tarea de seguimiento en Kanban:', err && err.message)
+    ))
+    .then(renderQuotesPanel);
 }
 
 const QUOTE_STATUSES = [
@@ -2609,6 +2709,9 @@ function renderQuotesPanel() {
         <div class="text-xs text-slate-400 w-24 text-center shrink-0">${itemCount} ítem${itemCount === 1 ? '' : 's'}</div>
         <div class="text-sm font-bold text-slate-700 w-28 text-right shrink-0">${formatCOP(q.grandTotal)}</div>
         <div class="js-quote-status-group flex items-center gap-1.5 shrink-0"></div>
+        <button class="js-quote-pdf p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 shrink-0" title="Descargar PDF de esta cotización">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z" stroke-linejoin="round"/><path d="M15 2v5h5" stroke-linejoin="round"/></svg>
+        </button>
         <button class="js-quote-edit p-1.5 rounded text-slate-300 hover:text-sky-600 hover:bg-sky-50 shrink-0" title="Editar cotización">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -2657,6 +2760,19 @@ function renderQuotesPanel() {
         }
       }
 
+      card.querySelector('.js-quote-pdf').addEventListener('click', function() {
+        const btn = this;
+        btn.disabled = true;
+        btn.classList.add('opacity-40');
+        generateQuotePdf(q).then(pdf => {
+          pdf.save(quotePdfFileName(q.clientName));
+        }).catch((err) => {
+          alert('No se pudo generar el PDF: ' + (err && err.message || ''));
+        }).finally(() => {
+          btn.disabled = false;
+          btn.classList.remove('opacity-40');
+        });
+      });
       card.querySelector('.js-quote-edit').addEventListener('click', () => openQuoteEditModal(q));
       card.querySelector('.js-quote-delete').addEventListener('click', () => {
         if (!confirm('¿Eliminar esta cotización del historial?')) return;
