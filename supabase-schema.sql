@@ -46,8 +46,10 @@ end;
 $$;
 
 -- Rastro de objetos eliminados del inventario (qué se borró, quién y
--- cuándo) — se llena desde la app justo antes de borrar de "items",
--- nunca se actualiza ni se borra desde la app.
+-- cuándo) — se llena desde la app justo antes de borrar de "items".
+-- Guarda también la imagen/ficha técnica para poder reincorporar el
+-- objeto tal cual estaba; una fila desaparece de aquí cuando se
+-- reincorpora (vuelve a "items") o cuando se elimina en definitiva.
 create table if not exists deleted_items (
   id text primary key,
   "itemId" text,
@@ -57,12 +59,19 @@ create table if not exists deleted_items (
   subline text,
   description text,
   "priceNoTax" numeric,
+  "imageDataUrl" text,
+  "image3DDataUrl" text,
   "quoteCategory" text,
+  "datasheetUrl" text,
   "deletedAt" bigint,
   "deletedByName" text,
   "deletedByEmail" text
 );
 create index if not exists deleted_items_deletedat_idx on deleted_items ("deletedAt" desc);
+-- Por si la tabla ya existía de una corrida anterior de este script:
+alter table deleted_items add column if not exists "imageDataUrl" text;
+alter table deleted_items add column if not exists "image3DDataUrl" text;
+alter table deleted_items add column if not exists "datasheetUrl" text;
 
 -- Historial de cotizaciones generadas (Panel Cotizaciones)
 create table if not exists quotes (
@@ -227,13 +236,17 @@ create policy "items: escribir" on items for all to authenticated
   with check (public.current_user_role() in ('admin', 'editor'));
 
 -- deleted_items (rastro de eliminados) — cualquiera aprobado puede
--- leerlo, pero solo se inserta (nunca se actualiza ni se borra desde
--- la app); solo puede insertar quien también puede borrar de items.
+-- leerlo; solo quien también puede borrar de items puede insertar
+-- (al eliminar un objeto) o borrar filas de aquí (al reincorporar un
+-- objeto o al purgarlo en definitiva). Nunca se actualiza.
 drop policy if exists "deleted_items: leer" on deleted_items;
 create policy "deleted_items: leer" on deleted_items for select to authenticated using (public.current_user_role() is not null);
 drop policy if exists "deleted_items: crear" on deleted_items;
 create policy "deleted_items: crear" on deleted_items for insert to authenticated
   with check (public.current_user_role() in ('admin', 'editor'));
+drop policy if exists "deleted_items: eliminar" on deleted_items;
+create policy "deleted_items: eliminar" on deleted_items for delete to authenticated
+  using (public.current_user_role() in ('admin', 'editor'));
 
 -- counters (soporte del código automático — mismos permisos que items)
 drop policy if exists "allow all - counters" on counters;

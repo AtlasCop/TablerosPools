@@ -611,6 +611,7 @@
             <th class="px-4 py-2.5 font-semibold text-right">Precio sin IVA</th>
             <th class="px-4 py-2.5 font-semibold">Eliminado por</th>
             <th class="px-4 py-2.5 font-semibold">Fecha</th>
+            <th class="js-write-only px-4 py-2.5 font-semibold">Acciones</th>
           </tr>
         </thead>
         <tbody id="deletedItemsTableBody"></tbody>
@@ -1064,7 +1065,10 @@ function idbLogDeletedItem(item) {
     subline: item.subline,
     description: item.description,
     priceNoTax: item.priceNoTax,
+    imageDataUrl: item.imageDataUrl || null,
+    image3DDataUrl: item.image3DDataUrl || null,
     quoteCategory: item.quoteCategory,
+    datasheetUrl: item.datasheetUrl || null,
     deletedAt: Date.now(),
     deletedByName: (CURRENT_PROFILE && CURRENT_PROFILE.full_name) || '',
     deletedByEmail: (CURRENT_PROFILE && CURRENT_PROFILE.email) || ''
@@ -1073,6 +1077,29 @@ function idbLogDeletedItem(item) {
 }
 function idbGetAllDeletedItems() {
   return sb.from('deleted_items').select('*').order('deletedAt', { ascending: false }).then(sbResult);
+}
+function idbPurgeDeletedItemLog(logId) {
+  return sb.from('deleted_items').delete().eq('id', logId).then(sbResult).then(() => {});
+}
+/* Vuelve a crear el objeto en "items" con los mismos datos que tenía
+   (mismo id, para no perder el rastro de a qué corresponde), y borra
+   la fila del rastro de eliminados — ya no está eliminado. */
+function idbRestoreDeletedItem(row) {
+  const record = {
+    id: row.itemId || `custom-${row.categoryId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    categoryId: row.categoryId,
+    code: row.code,
+    name: row.name,
+    subline: row.subline,
+    description: row.description,
+    priceNoTax: row.priceNoTax,
+    imageDataUrl: row.imageDataUrl || null,
+    image3DDataUrl: row.image3DDataUrl || null,
+    quoteCategory: row.quoteCategory,
+    datasheetUrl: row.datasheetUrl || null,
+    createdAt: Date.now()
+  };
+  return idbPutItem(record).then(() => idbPurgeDeletedItemLog(row.id)).then(() => record);
 }
 /* Deja el rastro (quién y cuándo) antes de borrar de verdad. Si el
    registro del rastro falla por lo que sea, igual se borra el objeto
@@ -1749,7 +1776,7 @@ document.getElementById('btnAddItem').addEventListener('click', () => openItemMo
 --------------------------------------------------------- */
 function renderDeletedItemsModal() {
   const tbody = document.getElementById('deletedItemsTableBody');
-  tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Cargando…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Cargando…</td></tr>';
   idbGetAllDeletedItems().then(rows => {
     tbody.innerHTML = '';
     document.getElementById('deletedItemsEmpty').classList.toggle('hidden', rows.length > 0);
@@ -1764,11 +1791,37 @@ function renderDeletedItemsModal() {
         <td class="px-4 py-2 text-right text-slate-600 whitespace-nowrap">${row.priceNoTax != null ? formatCOP(row.priceNoTax) : '—'}</td>
         <td class="px-4 py-2 text-slate-500">${escapeHtml(row.deletedByName) || escapeHtml(row.deletedByEmail) || '—'}</td>
         <td class="px-4 py-2 text-slate-400 whitespace-nowrap">${row.deletedAt ? new Date(row.deletedAt).toLocaleString('es-CO') : '—'}</td>
+        <td class="js-write-only px-4 py-2 whitespace-nowrap">
+          <div class="flex items-center gap-1">
+            <button class="js-restore-deleted-item p-1.5 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" title="Reincorporar al inventario">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 1 2.6 6.3M3 21v-6h6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="js-purge-deleted-item p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50" title="Eliminar en definitiva (ya no se podrá recuperar)">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </td>
       `;
+      tr.querySelector('.js-restore-deleted-item').addEventListener('click', () => {
+        if (!confirm(`¿Reincorporar "${row.name}" (${row.code}) al inventario de "${cat ? cat.label : row.categoryId}"?`)) return;
+        idbRestoreDeletedItem(row).then(record => {
+          CUSTOM_ITEMS_BY_ID[record.id] = record;
+          renderDeletedItemsModal();
+          renderInventory();
+          renderInventoryTable();
+          rebuildQuote();
+        }).catch((err) => alert('No se pudo reincorporar: ' + (err && err.message || '')));
+      });
+      tr.querySelector('.js-purge-deleted-item').addEventListener('click', () => {
+        if (!confirm(`¿Eliminar "${row.name}" (${row.code}) en definitiva? Ya no va a quedar ningún rastro de este objeto, y esta acción no se puede deshacer.`)) return;
+        idbPurgeDeletedItemLog(row.id).then(() => {
+          renderDeletedItemsModal();
+        }).catch((err) => alert('No se pudo eliminar: ' + (err && err.message || '')));
+      });
       tbody.appendChild(tr);
     });
   }).catch((err) => {
-    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">No se pudo cargar: ${escapeHtml(err && err.message || '')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-red-400">No se pudo cargar: ${escapeHtml(err && err.message || '')}</td></tr>`;
   });
 }
 document.getElementById('btnViewDeletedItems').addEventListener('click', () => {
