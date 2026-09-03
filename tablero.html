@@ -1818,13 +1818,14 @@ function rebuildQuote() {
 
   const byCategory = computeQuoteByCategory();
 
-  // Fijas: las 26/27 categorías siempre se muestran, en este orden, tengan
-  // o no objetos todavía — no se ocultan ni reordenan según lo que haya en
-  // el tablero (a diferencia de la primera versión, que solo mostraba las
-  // que tenían algo).
+  // Solo se muestra el bloque de una categoría de cotización una vez
+  // tiene al menos un objeto agregado al tablero — no de entrada en
+  // cada carga de la página. Coincide con el documento de cotización
+  // final, que ya solo incluye las categorías con ítems.
   let grandTotal = 0;
   QUOTE_CATEGORIES.forEach(qc => {
     const rows = byCategory[qc.id] || [];
+    if (!rows.length) return;
 
     const isOptional = qc.label.toLowerCase().includes('(opcional)');
     const headerColor = isOptional ? 'bg-orange-400' : 'bg-sky-400';
@@ -1833,51 +1834,44 @@ function rebuildQuote() {
     block.innerHTML = `<div class="${headerColor} text-white text-center font-bold text-[10px] py-1.5 px-2 uppercase leading-tight">${qc.label}</div>`;
 
     let subtotal = 0;
-    if (rows.length) {
-      const rowsWrap = document.createElement('div');
-      rowsWrap.className = 'divide-y divide-slate-100';
-      rows.forEach(({ dbItem, qty, itemId }) => {
-        const unit = dbItem.priceNoTax || 0;
-        const lineTotal = unit * qty;
-        subtotal += lineTotal;
-        const row = document.createElement('div');
-        row.className = 'flex items-start gap-1.5 px-2 py-1.5';
-        row.title = [dbItem.subline, dbItem.description].filter(Boolean).join(' — ');
-        const imgHtml = dbItem.imageDataUrl
-          ? `<img src="${dbItem.imageDataUrl}" class="w-7 h-7 rounded object-cover border border-slate-100 shrink-0" />`
-          : `<div class="w-7 h-7 rounded bg-slate-100 shrink-0"></div>`;
-        row.innerHTML = `
-          ${imgHtml}
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between gap-1">
-              <span class="text-slate-400 text-[9px] font-mono">${dbItem.code}</span>
-              <span class="text-slate-400 text-[9px] shrink-0">Cant.
-                <input type="number" min="1" step="1" value="${qty}" class="js-quote-qty w-9 text-center text-[9px] text-slate-700 border border-slate-200 rounded px-0.5 py-0.5 outline-none focus:ring-1 focus:ring-sky-400" />
-              </span>
-            </div>
-            <p class="text-slate-700 text-[10px] leading-tight truncate">${dbItem.name}</p>
-            <div class="flex items-center justify-between text-[10px]">
-              <span class="text-slate-400">${formatCOP(unit)}</span>
-              <span class="font-semibold text-slate-700">${formatCOP(lineTotal)}</span>
-            </div>
+    const rowsWrap = document.createElement('div');
+    rowsWrap.className = 'divide-y divide-slate-100';
+    rows.forEach(({ dbItem, qty, itemId }) => {
+      const unit = dbItem.priceNoTax || 0;
+      const lineTotal = unit * qty;
+      subtotal += lineTotal;
+      const row = document.createElement('div');
+      row.className = 'flex items-start gap-1.5 px-2 py-1.5';
+      row.title = [dbItem.subline, dbItem.description].filter(Boolean).join(' — ');
+      const imgHtml = dbItem.imageDataUrl
+        ? `<img src="${dbItem.imageDataUrl}" class="w-7 h-7 rounded object-cover border border-slate-100 shrink-0" />`
+        : `<div class="w-7 h-7 rounded bg-slate-100 shrink-0"></div>`;
+      row.innerHTML = `
+        ${imgHtml}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-slate-400 text-[9px] font-mono">${dbItem.code}</span>
+            <span class="text-slate-400 text-[9px] shrink-0">Cant.
+              <input type="number" min="1" step="1" value="${qty}" class="js-quote-qty w-9 text-center text-[9px] text-slate-700 border border-slate-200 rounded px-0.5 py-0.5 outline-none focus:ring-1 focus:ring-sky-400" />
+            </span>
           </div>
-        `;
-        const qtyInput = row.querySelector('.js-quote-qty');
-        qtyInput.addEventListener('click', (e) => e.stopPropagation());
-        qtyInput.addEventListener('change', () => {
-          const n = Math.max(1, Math.round(Number(qtyInput.value)) || 1);
-          quoteQtyOverrides[itemId] = n;
-          pushHistory();
-        });
-        rowsWrap.appendChild(row);
+          <p class="text-slate-700 text-[10px] leading-tight truncate">${dbItem.name}</p>
+          <div class="flex items-center justify-between text-[10px]">
+            <span class="text-slate-400">${formatCOP(unit)}</span>
+            <span class="font-semibold text-slate-700">${formatCOP(lineTotal)}</span>
+          </div>
+        </div>
+      `;
+      const qtyInput = row.querySelector('.js-quote-qty');
+      qtyInput.addEventListener('click', (e) => e.stopPropagation());
+      qtyInput.addEventListener('change', () => {
+        const n = Math.max(1, Math.round(Number(qtyInput.value)) || 1);
+        quoteQtyOverrides[itemId] = n;
+        pushHistory();
       });
-      block.appendChild(rowsWrap);
-    } else {
-      const emptyRow = document.createElement('div');
-      emptyRow.className = 'px-2 py-2 text-[10px] text-slate-300 text-center italic';
-      emptyRow.textContent = 'Sin ítems';
-      block.appendChild(emptyRow);
-    }
+      rowsWrap.appendChild(row);
+    });
+    block.appendChild(rowsWrap);
 
     const subtotalRow = document.createElement('div');
     subtotalRow.className = 'bg-slate-50 text-[10px] font-bold text-slate-600 px-2 py-1.5 flex items-center justify-between';
@@ -1887,6 +1881,10 @@ function rebuildQuote() {
     quoteBody.appendChild(block);
     grandTotal += subtotal;
   });
+
+  if (!quoteBody.children.length) {
+    quoteBody.innerHTML = '<p class="text-center text-[11px] text-slate-300 italic py-6">Arrastra objetos al tablero para armar la cotización.</p>';
+  }
 
   quoteGrandTotal.textContent = formatCOP(grandTotal);
 }
