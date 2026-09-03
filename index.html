@@ -4,6 +4,34 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Aqua Bruma — Iniciar sesión</title>
+<script>
+/* Auto-actualización: cada minuto revisa si el servidor tiene una
+   versión más nueva de esta misma página (comparando el ETag) y
+   recarga sola apenas la detecta. No pide permiso: siempre actualiza. */
+(function () {
+  var baselineEtag = null;
+  function checkForUpdate() {
+    fetch(location.pathname + '?_=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+      .then(function (res) {
+        var etag = res.headers.get('etag') || res.headers.get('last-modified');
+        if (!etag) return;
+        if (baselineEtag === null) { baselineEtag = etag; return; }
+        if (etag !== baselineEtag) {
+          if (document.body) {
+            var note = document.createElement('div');
+            note.textContent = 'Hay una versión nueva — actualizando…';
+            note.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;font:600 13px sans-serif;padding:10px 18px;border-radius:8px;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.25);';
+            document.body.appendChild(note);
+          }
+          setTimeout(function () { location.reload(); }, 1200);
+        }
+      })
+      .catch(function () {});
+  }
+  checkForUpdate();
+  setInterval(checkForUpdate, 60000);
+})();
+</script>
 <link rel="stylesheet" href="assets/tailwind.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
