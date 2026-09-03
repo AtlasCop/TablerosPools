@@ -1569,8 +1569,15 @@ function updatePriceRangeBounds(items) {
   let min = Math.min(...prices);
   let max = Math.max(...prices);
   if (min === max) max = min + 1; // avoid a degenerate zero-width range input
-  const step = Math.max(1, Math.round((max - min) / 100));
-  [invPriceRangeMin, invPriceRangeMax].forEach(el => { el.min = min; el.max = max; el.step = step; });
+  // step="any" — con un step numérico, si (max-min) no es múltiplo exacto de
+  // él, el navegador redondea SILENCIOSAMENTE hacia abajo el valor que se le
+  // asigne (aquí, invPriceRangeMax.value = max) al múltiplo de step más
+  // cercano por debajo. Eso dejaba el filtro de precio con un límite máximo
+  // más bajo que el precio real del objeto más caro, excluyéndolo del panel
+  // sin ningún aviso — el objeto seguía bien guardado, solo dejaba de
+  // mostrarse. step="any" permite cualquier valor dentro de [min, max], sin
+  // redondeos.
+  [invPriceRangeMin, invPriceRangeMax].forEach(el => { el.min = min; el.max = max; el.step = 'any'; });
   invPriceRangeMin.value = min;
   invPriceRangeMax.value = max;
   updatePriceRangeUI();
