@@ -65,6 +65,8 @@ Historial de todas las cotizaciones generadas. Cada una muestra cliente, proyect
 - **Semáforo** de seguimiento: verde (menos de 7 días), amarillo (7-9 días), rojo (10 días o más sin cerrarse).
 - **Responsable asignado**, con botón de recordatorio por WhatsApp una vez se pone en rojo.
 - Tres botones de estado: **Pendiente / Autorizada / Facturada**, y opción de eliminar.
+- **Descargar PDF** (ícono de documento): vuelve a generar el PDF de esa cotización exacta, tal como quedó guardada — incluida la hoja de fichas técnicas — sin importar qué haya cambiado desde entonces en el tablero o el inventario.
+- Cada vez que se genera una cotización con un responsable asignado, se crea automáticamente una tarea de seguimiento para esa persona en el Tablero Kanban (columna "Por hacer").
 
 ### 3. Tablero Kanban
 Tareas del equipo en cuatro columnas con color: **📋 Por hacer → 🚀 En progreso → 🔍 En revisión → 🎉 Hecho**.
@@ -73,6 +75,7 @@ Tareas del equipo en cuatro columnas con color: **📋 Por hacer → 🚀 En pro
 - **Tareas**: título, descripción, prioridad (baja/media/alta, con acento de color en la tarjeta), fecha límite y responsable.
 - **Comentarios de actualización** por tarea, con foto del autor y fecha/hora exacta.
 - Las tarjetas se mueven arrastrándolas entre columnas o editando la tarea.
+- Generar una cotización (ver Panel Cotizaciones) crea aquí sola una tarea de seguimiento para el responsable asignado.
 
 ### 4. Tablero 3D
 Planeación real de la ubicación de los equipos en el cuarto de máquinas:
