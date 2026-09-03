@@ -2389,9 +2389,18 @@ function collectDatasheetItems() {
    html2canvas), esta hoja se dibuja con las funciones de texto de
    jsPDF directamente, para que los enlaces queden de verdad clicables
    en el PDF (textWithLink), no solo texto dentro de una imagen. */
-function addDatasheetsPage(pdf, pageWidth, pageHeight) {
+function addDatasheetsPage(pdf) {
   const items = collectDatasheetItems();
   if (!items.length) return;
+
+  // Hoja horizontal (landscape) para esta tabla en particular — jsPDF
+  // permite mezclar orientaciones dentro del mismo documento, así que
+  // el resto de la cotización sigue en vertical y solo esta página
+  // cambia. El ancho/alto se recalculan después de agregar la hoja,
+  // ya que cambian al pasar a horizontal.
+  pdf.addPage('a4', 'landscape');
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
 
   const marginX = 40;
   const marginTop = 60;
@@ -2421,12 +2430,11 @@ function addDatasheetsPage(pdf, pageWidth, pageHeight) {
     y += rowHeight;
   }
 
-  pdf.addPage();
   drawHeader();
 
   items.forEach((dbItem, i) => {
     if (y > pageHeight - 50) {
-      pdf.addPage();
+      pdf.addPage('a4', 'landscape');
       drawHeader();
     }
     pdf.setFont('helvetica', 'normal');
@@ -2466,7 +2474,7 @@ function generateQuotePdf() {
       pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
     }
-    addDatasheetsPage(pdf, pageWidth, pageHeight);
+    addDatasheetsPage(pdf);
     return pdf;
   });
 }
