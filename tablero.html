@@ -864,7 +864,7 @@
    para lo que no encaja en ninguna de las 26 explícitas.
 --------------------------------------------------------- */
 const QUOTE_CATEGORIES = [
-  { id: 'sist-filtracion', label: 'Sistema avanzado de filtración y recirculación de alto ahorro energético' },
+  { id: 'sist-filtracion', label: 'Sistema avanzado de filtración y recirculación' },
   { id: 'desinfeccion-cloro', label: 'Desinfección con cloro' },
   { id: 'complementos-desinfeccion', label: 'Complementos para desinfección (opcional)' },
   { id: 'iluminacion-q', label: 'Iluminación' },
@@ -3799,9 +3799,9 @@ itemDatasheetUrlInput.addEventListener('input', updateDatasheetOpenLink);
 
 /* "Categoría en la cotización" — buscador con lista en vez de un
    <select> plano, porque son 27 categorías y algunas con nombres
-   largos (ej. "Sistema avanzado de filtración y recirculación de
-   alto ahorro energético"), difíciles de ubicar en un desplegable
-   normal. El valor real sigue viviendo en itemQuoteCategorySelect
+   largos (ej. "Sistemas de aspiración electrónicos (opcional)"),
+   difíciles de ubicar en un desplegable normal. El valor real sigue
+   viviendo en itemQuoteCategorySelect
    (ahora un <input type="hidden">, no un <select>, pero .value se
    lee/escribe exactamente igual) — así el resto del código que ya
    usaba itemQuoteCategorySelect.value no tuvo que cambiar. */
