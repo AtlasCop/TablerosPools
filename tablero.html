@@ -2236,6 +2236,88 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !quoteDo
   document.getElementById(id).addEventListener('input', renderQuoteDocPreview);
 });
 
+/* Objetos del tablero que tienen ficha técnica (enlace), en el mismo
+   orden en que aparecen en la cotización, sin repetir uno que salga
+   en más de una categoría. */
+function collectDatasheetItems() {
+  const byCategory = computeQuoteByCategory();
+  const seen = new Set();
+  const items = [];
+  QUOTE_CATEGORIES.forEach(qc => {
+    const rows = byCategory[qc.id];
+    if (!rows) return;
+    rows.forEach(({ dbItem }) => {
+      if (dbItem.datasheetUrl && !seen.has(dbItem.id)) {
+        seen.add(dbItem.id);
+        items.push(dbItem);
+      }
+    });
+  });
+  return items;
+}
+
+/* Tabla de fichas técnicas, en una hoja aparte al final del PDF — a
+   diferencia del resto del documento (una imagen rasterizada con
+   html2canvas), esta hoja se dibuja con las funciones de texto de
+   jsPDF directamente, para que los enlaces queden de verdad clicables
+   en el PDF (textWithLink), no solo texto dentro de una imagen. */
+function addDatasheetsPage(pdf, pageWidth, pageHeight) {
+  const items = collectDatasheetItems();
+  if (!items.length) return;
+
+  const marginX = 40;
+  const marginTop = 60;
+  const rowHeight = 26;
+  const colNum = marginX;
+  const colCode = marginX + 26;
+  const colName = marginX + 110;
+  const colLink = marginX + 330;
+  const tableRight = pageWidth - marginX;
+  let y = 0;
+
+  function drawHeader() {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(16);
+    pdf.setTextColor('#0f172a');
+    pdf.text('Fichas técnicas de los productos', marginX, marginTop);
+    y = marginTop + 30;
+    pdf.setFillColor('#f8fafc');
+    pdf.rect(marginX, y - 12, tableRight - marginX, rowHeight, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.setTextColor('#64748b');
+    pdf.text('#', colNum, y + 4);
+    pdf.text('CÓDIGO', colCode, y + 4);
+    pdf.text('NOMBRE', colName, y + 4);
+    pdf.text('ENLACE A LA FICHA', colLink, y + 4);
+    y += rowHeight;
+  }
+
+  pdf.addPage();
+  drawHeader();
+
+  items.forEach((dbItem, i) => {
+    if (y > pageHeight - 50) {
+      pdf.addPage();
+      drawHeader();
+    }
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(10);
+    pdf.setTextColor('#334155');
+    pdf.text(`${i + 1}.`, colNum, y + 4);
+    pdf.setTextColor('#64748b');
+    pdf.text(dbItem.code || '—', colCode, y + 4);
+    pdf.setTextColor('#1e293b');
+    const name = dbItem.name.length > 34 ? dbItem.name.slice(0, 34) + '…' : dbItem.name;
+    pdf.text(name, colName, y + 4);
+    pdf.setTextColor('#0ea5e9');
+    pdf.textWithLink(dbItem.datasheetUrl, colLink, y + 4, { url: dbItem.datasheetUrl });
+    pdf.setDrawColor('#e2e8f0');
+    pdf.line(marginX, y + 10, tableRight, y + 10);
+    y += rowHeight;
+  });
+}
+
 function generateQuotePdf() {
   const preview = document.getElementById('quoteDocPreview');
   return html2canvas(preview, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(canvas => {
@@ -2256,6 +2338,7 @@ function generateQuotePdf() {
       pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
     }
+    addDatasheetsPage(pdf, pageWidth, pageHeight);
     return pdf;
   });
 }
