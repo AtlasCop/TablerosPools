@@ -1539,7 +1539,15 @@ function renderInventory() {
   // creado aunque sí existiera en la base de datos (se veía bien en la
   // pestaña Inventario, que sí usa esta misma caché, pero no aquí). Usar la
   // misma fuente de datos en los dos lugares evita que se puedan desincronizar.
-  currentCategoryCustomItems = Object.values(CUSTOM_ITEMS_BY_ID).filter(dbItem => dbItem.categoryId === cat.id);
+  // Orden explícito por fecha de creación (el más viejo primero) para que
+  // cada objeto tenga siempre su propio puesto fijo en la cuadrícula y los
+  // nuevos siempre queden después de los que ya había — sin este orden,
+  // dependía del orden en que la base de datos devolviera las filas, que no
+  // es estable, y podía hacer que un objeto nuevo pareciera "reemplazar"
+  // visualmente a uno viejo en vez de agregarse aparte.
+  currentCategoryCustomItems = Object.values(CUSTOM_ITEMS_BY_ID)
+    .filter(dbItem => dbItem.categoryId === cat.id)
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   updatePriceRangeBounds(currentCategoryCustomItems);
   renderCustomItemCards();
 }
