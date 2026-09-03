@@ -1045,7 +1045,20 @@ function requireAuthAndRole() {
     });
   }).catch((err) => { console.warn('Acceso no confirmado:', err && err.message); });
 }
-requireAuthAndRole();
+requireAuthAndRole().then(() => {
+  if (!CURRENT_ROLE) return; // sin sesión confirmada — ya se redirigió a index.html
+  // Vuelve a la pestaña donde estaba antes de recargar (Productos ya es la
+  // que se ve por defecto en el HTML, así que solo hace falta actuar si
+  // era otra) — nunca restaura "Usuarios" para quien no es administrador,
+  // aunque esa haya sido la última pestaña que tuvo abierta antes de que
+  // le cambiaran el rol.
+  try {
+    const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
+    if (savedTab && TAB_VIEWS[savedTab] && (savedTab !== 'usuarios' || CURRENT_ROLE === 'admin')) {
+      setActiveTab(savedTab);
+    }
+  } catch {}
+});
 function idbPutItem(item) {
   return sb.from('items').upsert(item).then(sbResult).then(() => item);
 }
@@ -1474,7 +1487,14 @@ boardWrap.addEventListener('drop', (e) => {
 const catRail = document.getElementById('catRail');
 const invGrid = document.getElementById('invGrid');
 const invTitle = document.getElementById('invTitle');
-let activeCat = CATALOG[0].id;
+const ACTIVE_CATEGORY_KEY = 'tablero_active_category';
+function loadSavedActiveCategory() {
+  try {
+    const saved = localStorage.getItem(ACTIVE_CATEGORY_KEY);
+    return saved && CATALOG.some(c => c.id === saved) ? saved : CATALOG[0].id;
+  } catch { return CATALOG[0].id; }
+}
+let activeCat = loadSavedActiveCategory();
 
 function renderCatRail() {
   catRail.innerHTML = '';
@@ -1484,7 +1504,12 @@ function renderCatRail() {
     btn.innerHTML = cat.icon
       ? `<span class="w-7 h-7 rounded-md bg-white/90 flex items-center justify-center p-1"><img src="${cat.icon}" alt="" class="w-full h-full object-contain" /></span><span>${cat.label}</span>`
       : `<span class="w-6 h-6 rounded-md" style="background:${cat.color}"></span><span>${cat.label}</span>`;
-    btn.addEventListener('click', () => { activeCat = cat.id; renderCatRail(); renderInventory(); });
+    btn.addEventListener('click', () => {
+      activeCat = cat.id;
+      try { localStorage.setItem(ACTIVE_CATEGORY_KEY, cat.id); } catch {}
+      renderCatRail();
+      renderInventory();
+    });
     catRail.appendChild(btn);
   });
 }
@@ -2102,6 +2127,7 @@ const TAB_VIEWS = {
   tablero3d: { view: viewTablero3D, btn: tabBtnTablero3D },
   usuarios: { view: viewUsuarios, btn: tabBtnUsuarios },
 };
+const ACTIVE_TAB_KEY = 'tablero_active_tab';
 function setActiveTab(tab) {
   Object.entries(TAB_VIEWS).forEach(([key, { view, btn }]) => {
     const active = key === tab;
@@ -2111,6 +2137,7 @@ function setActiveTab(tab) {
     btn.classList.toggle('border-transparent', !active);
     btn.classList.toggle('text-slate-400', !active);
   });
+  try { localStorage.setItem(ACTIVE_TAB_KEY, tab); } catch {}
   if (tab === 'productos') requestAnimationFrame(resizeCanvas);
   else if (tab === 'inventario') renderInventoryTable();
   else if (tab === 'cotizaciones') renderQuotesPanel();
