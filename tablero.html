@@ -65,7 +65,8 @@
   body.role-consulta .js-quote-delete {
     display: none !important;
   }
-  body:not(.role-admin) #tabBtnUsuarios {
+  body:not(.role-admin) #tabBtnUsuarios,
+  body:not(.role-admin) #btnResetCodes {
     display: none !important;
   }
 </style>
@@ -323,7 +324,17 @@
           <h2 class="text-sm font-bold text-slate-700">Inventario de objetos</h2>
           <p class="text-[11px] text-slate-400 mt-0.5">Todos los objetos creados, en todas las categorías, en una sola tabla.</p>
         </div>
-        <span id="inventoryTableCount" class="text-xs text-slate-400 shrink-0"></span>
+        <div class="flex items-center gap-2 shrink-0">
+          <span id="inventoryTableCount" class="text-xs text-slate-400"></span>
+          <button id="btnViewDeletedItems" type="button" class="text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5" title="Ver rastro de objetos eliminados">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Eliminados
+          </button>
+          <button id="btnResetCodes" type="button" class="text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5" title="Reiniciar la numeración de códigos de todas las categorías">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 1 2.6 6.3M3 21v-6h6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Reiniciar numeración
+          </button>
+        </div>
       </div>
       <div class="flex items-center gap-2 flex-wrap mt-3">
         <div class="relative flex-1 min-w-[220px] max-w-sm">
@@ -576,6 +587,35 @@
       <div class="flex-1 overflow-y-auto bg-slate-200 p-4 md:p-6 flex justify-center items-start">
         <div id="quoteDocPreview" class="bg-white shadow-xl shrink-0" style="width:800px; max-width:100%;"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- OBJETOS ELIMINADOS (rastro, pestaña Inventario) -->
+<div id="deletedItemsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-full max-h-[85vh] flex flex-col overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
+      <div>
+        <h3 class="text-sm font-bold text-slate-800">Objetos eliminados</h3>
+        <p class="text-[11px] text-slate-400 mt-0.5">Rastro de todo lo que se ha borrado del inventario, y quién lo hizo.</p>
+      </div>
+      <button id="deletedItemsModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="flex-1 overflow-y-auto">
+      <table class="w-full text-xs border-collapse">
+        <thead class="bg-white sticky top-0 z-10 shadow-sm">
+          <tr class="text-left text-slate-500 uppercase text-[10px]">
+            <th class="px-4 py-2.5 font-semibold">Código</th>
+            <th class="px-4 py-2.5 font-semibold">Nombre</th>
+            <th class="px-4 py-2.5 font-semibold">Categoría</th>
+            <th class="px-4 py-2.5 font-semibold text-right">Precio sin IVA</th>
+            <th class="px-4 py-2.5 font-semibold">Eliminado por</th>
+            <th class="px-4 py-2.5 font-semibold">Fecha</th>
+          </tr>
+        </thead>
+        <tbody id="deletedItemsTableBody"></tbody>
+      </table>
+      <p id="deletedItemsEmpty" class="hidden text-center text-sm text-slate-400 py-16">Aún no se ha eliminado ningún objeto del inventario.</p>
     </div>
   </div>
 </div>
@@ -1008,6 +1048,37 @@ function idbDeleteItem(id) {
 }
 function idbNextCode(categoryId, prefix) {
   return sb.rpc('next_code', { p_category_id: categoryId, p_prefix: prefix }).then(sbResult);
+}
+function idbLogDeletedItem(item) {
+  const entry = {
+    id: 'del_' + item.id + '_' + Date.now(),
+    itemId: item.id,
+    categoryId: item.categoryId,
+    code: item.code,
+    name: item.name,
+    subline: item.subline,
+    description: item.description,
+    priceNoTax: item.priceNoTax,
+    quoteCategory: item.quoteCategory,
+    deletedAt: Date.now(),
+    deletedByName: (CURRENT_PROFILE && CURRENT_PROFILE.full_name) || '',
+    deletedByEmail: (CURRENT_PROFILE && CURRENT_PROFILE.email) || ''
+  };
+  return sb.from('deleted_items').insert(entry).then(sbResult).then(() => {});
+}
+function idbGetAllDeletedItems() {
+  return sb.from('deleted_items').select('*').order('deletedAt', { ascending: false }).then(sbResult);
+}
+/* Deja el rastro (quién y cuándo) antes de borrar de verdad. Si el
+   registro del rastro falla por lo que sea, igual se borra el objeto
+   — no queremos que un problema de bitácora bloquee la eliminación. */
+function deleteInventoryItem(item) {
+  return idbLogDeletedItem(item)
+    .catch((err) => console.warn('No se pudo registrar el objeto eliminado:', err && err.message))
+    .then(() => idbDeleteItem(item.id));
+}
+function idbResetItemCodeCounters() {
+  return sb.from('counters').delete().not('categoryId', 'is', null).then(sbResult).then(() => {});
 }
 function idbGetAllItems() {
   return sb.from('items').select('*').then(sbResult);
@@ -1514,7 +1585,7 @@ function renderCustomItemCards() {
     card.querySelector('.js-delete-item').addEventListener('click', (e) => {
       e.stopPropagation();
       if (!confirm(`¿Eliminar "${dbItem.name}" (${dbItem.code}) del inventario? Esta acción no se puede deshacer.`)) return;
-      idbDeleteItem(dbItem.id).then(() => {
+      deleteInventoryItem(dbItem).then(() => {
         delete CUSTOM_ITEMS_BY_ID[dbItem.id];
         renderInventory();
         renderInventoryTable();
@@ -1620,7 +1691,7 @@ function renderInventoryTable() {
     tr.querySelector('.js-edit-item').addEventListener('click', () => openItemModal('edit', it.categoryId, it));
     tr.querySelector('.js-delete-item').addEventListener('click', () => {
       if (!confirm(`¿Eliminar "${it.name}" (${it.code}) del inventario? Esta acción no se puede deshacer.`)) return;
-      idbDeleteItem(it.id).then(() => {
+      deleteInventoryItem(it).then(() => {
         delete CUSTOM_ITEMS_BY_ID[it.id];
         renderInventoryTable();
         if (it.categoryId === activeCat) renderInventory();
@@ -1650,6 +1721,53 @@ renderCatRail();
 renderInventory();
 
 document.getElementById('btnAddItem').addEventListener('click', () => openItemModal('add', activeCat, null));
+
+/* ---------------------------------------------------------
+   OBJETOS ELIMINADOS — rastro de lo borrado del inventario, y
+   REINICIAR NUMERACIÓN — pone en cero el contador de códigos de
+   cada categoría (solo administradores).
+--------------------------------------------------------- */
+function renderDeletedItemsModal() {
+  const tbody = document.getElementById('deletedItemsTableBody');
+  tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Cargando…</td></tr>';
+  idbGetAllDeletedItems().then(rows => {
+    tbody.innerHTML = '';
+    document.getElementById('deletedItemsEmpty').classList.toggle('hidden', rows.length > 0);
+    rows.forEach(row => {
+      const cat = CATALOG.find(c => c.id === row.categoryId);
+      const tr = document.createElement('tr');
+      tr.className = 'border-b border-slate-100';
+      tr.innerHTML = `
+        <td class="px-4 py-2 font-mono text-slate-500 whitespace-nowrap">${escapeHtml(row.code) || '—'}</td>
+        <td class="px-4 py-2 font-medium text-slate-700">${escapeHtml(row.name) || '—'}</td>
+        <td class="px-4 py-2 text-slate-500">${escapeHtml(cat ? cat.label : row.categoryId) || '—'}</td>
+        <td class="px-4 py-2 text-right text-slate-600 whitespace-nowrap">${row.priceNoTax != null ? formatCOP(row.priceNoTax) : '—'}</td>
+        <td class="px-4 py-2 text-slate-500">${escapeHtml(row.deletedByName) || escapeHtml(row.deletedByEmail) || '—'}</td>
+        <td class="px-4 py-2 text-slate-400 whitespace-nowrap">${row.deletedAt ? new Date(row.deletedAt).toLocaleString('es-CO') : '—'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }).catch((err) => {
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">No se pudo cargar: ${escapeHtml(err && err.message || '')}</td></tr>`;
+  });
+}
+document.getElementById('btnViewDeletedItems').addEventListener('click', () => {
+  renderDeletedItemsModal();
+  document.getElementById('deletedItemsModal').classList.remove('hidden');
+});
+document.getElementById('deletedItemsModalClose').addEventListener('click', () => {
+  document.getElementById('deletedItemsModal').classList.add('hidden');
+});
+
+document.getElementById('btnResetCodes').addEventListener('click', () => {
+  const ok = confirm('¿Reiniciar la numeración de códigos de todas las categorías?\n\nLos próximos objetos que crees en cada categoría volverán a empezar en 0001. Los objetos que ya existen no cambian de código — si dejas objetos con números altos, un código nuevo podría coincidir con uno ya usado.\n\nEsta acción no se puede deshacer.');
+  if (!ok) return;
+  idbResetItemCodeCounters().then(() => {
+    alert('Listo — la numeración se reinició. Los próximos objetos creados en cada categoría empezarán desde 0001.');
+  }).catch((err) => {
+    alert('No se pudo reiniciar la numeración: ' + (err && err.message || ''));
+  });
+});
 
 /* ---------------------------------------------------------
    COTIZACIÓN — panel derecho, tipo "canasta de compras": se

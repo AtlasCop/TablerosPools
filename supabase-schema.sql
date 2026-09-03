@@ -44,6 +44,25 @@ begin
 end;
 $$;
 
+-- Rastro de objetos eliminados del inventario (qué se borró, quién y
+-- cuándo) — se llena desde la app justo antes de borrar de "items",
+-- nunca se actualiza ni se borra desde la app.
+create table if not exists deleted_items (
+  id text primary key,
+  "itemId" text,
+  "categoryId" text,
+  code text,
+  name text,
+  subline text,
+  description text,
+  "priceNoTax" numeric,
+  "quoteCategory" text,
+  "deletedAt" bigint,
+  "deletedByName" text,
+  "deletedByEmail" text
+);
+create index if not exists deleted_items_deletedat_idx on deleted_items ("deletedAt" desc);
+
 -- Historial de cotizaciones generadas (Panel Cotizaciones)
 create table if not exists quotes (
   id text primary key,
@@ -189,6 +208,7 @@ create policy "admins actualizan perfiles" on profiles for update
 -- estado (pero no eliminar).
 -- ------------------------------------------------------------
 alter table items enable row level security;
+alter table deleted_items enable row level security;
 alter table counters enable row level security;
 alter table quotes enable row level security;
 alter table kanban_tasks enable row level security;
@@ -203,6 +223,15 @@ create policy "items: leer" on items for select to authenticated using (public.c
 drop policy if exists "items: escribir" on items;
 create policy "items: escribir" on items for all to authenticated
   using (public.current_user_role() in ('admin', 'editor'))
+  with check (public.current_user_role() in ('admin', 'editor'));
+
+-- deleted_items (rastro de eliminados) — cualquiera aprobado puede
+-- leerlo, pero solo se inserta (nunca se actualiza ni se borra desde
+-- la app); solo puede insertar quien también puede borrar de items.
+drop policy if exists "deleted_items: leer" on deleted_items;
+create policy "deleted_items: leer" on deleted_items for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "deleted_items: crear" on deleted_items;
+create policy "deleted_items: crear" on deleted_items for insert to authenticated
   with check (public.current_user_role() in ('admin', 'editor'));
 
 -- counters (soporte del código automático — mismos permisos que items)
