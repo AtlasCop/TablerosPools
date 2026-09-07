@@ -23,6 +23,8 @@ Cada cuenta tiene un **rol**, asignado por un administrador desde la pestaña **
 | Crear/editar/eliminar inventario | ✅ | ✅ | ❌ |
 | Crear y ver cotizaciones, cambiar su estado | ✅ | ✅ | ✅ |
 | Eliminar cotizaciones | ✅ | ✅ | ❌ |
+| Crear/editar prospectos (Pipeline) | ✅ | ✅ | ✅ |
+| Eliminar prospectos | ✅ | ✅ | ❌ |
 | Crear/editar/eliminar tareas y equipo del Kanban | ✅ | ✅ | ❌ |
 | Agregar/editar/eliminar en el Tablero 3D | ✅ | ✅ | ❌ |
 | Aprobar usuarios y asignar roles | ✅ | ❌ | ❌ |
@@ -68,7 +70,15 @@ Historial de todas las cotizaciones generadas. Cada una muestra cliente, proyect
 - **Descargar PDF** (ícono de documento): vuelve a generar el PDF de esa cotización exacta, tal como quedó guardada — incluida la hoja de fichas técnicas — sin importar qué haya cambiado desde entonces en el tablero o el inventario.
 - Cada vez que se genera una cotización con un responsable asignado, se crea automáticamente una tarea de seguimiento para esa persona en el Tablero Kanban (columna "Por hacer").
 
-### 3. Tablero Kanban
+### 3. Pipeline
+Lista de prospectos (clientes potenciales), antes de que tengan una cotización formal:
+
+- **Persona de contacto, título/empresa, teléfono y correo**, con etiqueta de nivel de interés (Muy interesado / Interesado / Poco interesado).
+- **Próxima actividad**: fecha y nota de seguimiento — se avisa si no hay ninguna programada o si ya se venció.
+- Se puede crear un prospecto directamente aquí, o desde el modal "Generar cotización" (con los datos del cliente ya escritos ahí) — la cotización queda enlazada a ese prospecto, y se ve reflejado en esta pestaña.
+- El teléfono queda guardado pensando en una futura integración con WhatsApp que actualice la próxima actividad sola — no implementada todavía.
+
+### 4. Tablero Kanban
 Tareas del equipo en cuatro columnas con color: **📋 Por hacer → 🚀 En progreso → 🔍 En revisión → 🎉 Hecho**.
 
 - **Equipo**: personas con nombre, cargo, foto de perfil (o iniciales de color) y teléfono.
@@ -77,7 +87,7 @@ Tareas del equipo en cuatro columnas con color: **📋 Por hacer → 🚀 En pro
 - Las tarjetas se mueven arrastrándolas entre columnas o editando la tarea.
 - Generar una cotización (ver Panel Cotizaciones) crea aquí sola una tarea de seguimiento para el responsable asignado.
 
-### 4. Tablero 3D
+### 5. Tablero 3D
 Planeación real de la ubicación de los equipos en el cuarto de máquinas:
 
 - Defines el **tamaño real del cuarto** (ancho, profundo, alto en metros).
@@ -85,7 +95,7 @@ Planeación real de la ubicación de los equipos en el cuarto de máquinas:
 - Los mueves, giras y escalas directamente con el mouse (gizmo tipo editor 3D), con las medidas en centímetros actualizándose en vivo.
 - Cámara libre o vista superior para revisar la posición exacta.
 
-### 5. Usuarios (solo administradores)
+### 6. Usuarios (solo administradores)
 Aprobar o rechazar solicitudes de acceso nuevas, asignar/cambiar el rol de cualquiera, o quitarle el acceso.
 
 ## Dónde vive la información
@@ -93,7 +103,7 @@ Aprobar o rechazar solicitudes de acceso nuevas, asignar/cambiar el rol de cualq
 | Dato | Dónde |
 |---|---|
 | Cuentas, aprobación y roles | Supabase Auth + tabla `profiles` |
-| Inventario, cotizaciones, Kanban, Tablero 3D | Supabase (compartido por todo el equipo, en tiempo real) |
+| Inventario, cotizaciones, prospectos (Pipeline), Kanban, Tablero 3D | Supabase (compartido por todo el equipo, en tiempo real) |
 | Tableros guardados ("Mis tableros") | `localStorage` (por navegador, no compartido todavía) |
 | Preferencias de ancho de paneles/columnas | `localStorage` (por navegador) |
 
