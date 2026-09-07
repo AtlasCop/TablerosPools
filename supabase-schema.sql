@@ -95,6 +95,30 @@ create table if not exists quotes (
 alter table quotes add column if not exists "ownerId" text;
 alter table quotes add column if not exists "ownerName" text;
 alter table quotes add column if not exists "ownerPhone" text;
+-- Cotización asociada a un prospecto (pestaña Pipeline), si tiene una:
+alter table quotes add column if not exists "prospectId" text;
+alter table quotes add column if not exists "prospectName" text;
+
+-- Prospectos (pestaña Pipeline) — seguimiento de clientes potenciales,
+-- antes de que lleguen a tener una cotización formal (aunque una vez
+-- la tienen, se les puede asociar). "tag" es el nivel de interés
+-- (mismo estilo que las etiquetas de colores del buzón de prospectos
+-- de Pipedrive, que fue la referencia para esta pantalla). El teléfono
+-- queda listo para una futura integración con WhatsApp que actualice
+-- "nextActivityAt" automáticamente — no implementada todavía.
+create table if not exists prospects (
+  id text primary key,
+  "contactName" text not null,
+  title text,
+  phone text,
+  email text,
+  tag text,
+  notes text,
+  "nextActivityAt" bigint,
+  "nextActivityNote" text,
+  "createdAt" bigint
+);
+create index if not exists prospects_createdat_idx on prospects ("createdAt" desc);
 
 -- Tareas del Tablero Kanban
 create table if not exists kanban_tasks (
@@ -221,6 +245,7 @@ alter table items enable row level security;
 alter table deleted_items enable row level security;
 alter table counters enable row level security;
 alter table quotes enable row level security;
+alter table prospects enable row level security;
 alter table kanban_tasks enable row level security;
 alter table kanban_members enable row level security;
 alter table room3d enable row level security;
@@ -268,6 +293,21 @@ create policy "quotes: actualizar" on quotes for update to authenticated
   with check (public.current_user_role() in ('admin', 'editor', 'consulta'));
 drop policy if exists "quotes: eliminar" on quotes;
 create policy "quotes: eliminar" on quotes for delete to authenticated
+  using (public.current_user_role() in ('admin', 'editor'));
+
+-- prospects (Pipeline) — mismos permisos que quotes: "consulta" también
+-- puede crear/ver/actualizar, solo no puede eliminar.
+drop policy if exists "prospects: leer" on prospects;
+create policy "prospects: leer" on prospects for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "prospects: crear" on prospects;
+create policy "prospects: crear" on prospects for insert to authenticated
+  with check (public.current_user_role() in ('admin', 'editor', 'consulta'));
+drop policy if exists "prospects: actualizar" on prospects;
+create policy "prospects: actualizar" on prospects for update to authenticated
+  using (public.current_user_role() in ('admin', 'editor', 'consulta'))
+  with check (public.current_user_role() in ('admin', 'editor', 'consulta'));
+drop policy if exists "prospects: eliminar" on prospects;
+create policy "prospects: eliminar" on prospects for delete to authenticated
   using (public.current_user_role() in ('admin', 'editor'));
 
 -- kanban_tasks
