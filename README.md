@@ -26,6 +26,7 @@ Cada cuenta tiene un **rol**, asignado por un administrador desde la pestaña **
 | Crear/editar prospectos (Pipeline) | ✅ | ✅ | ✅ |
 | Eliminar prospectos | ✅ | ✅ | ❌ |
 | Crear/editar/eliminar tareas y equipo del Kanban | ✅ | ✅ | ❌ |
+| Crear/editar/eliminar eventos del Calendario | ✅ | ✅ | ❌ |
 | Agregar/editar/eliminar en el Tablero 3D | ✅ | ✅ | ❌ |
 | Aprobar usuarios y asignar roles | ✅ | ❌ | ❌ |
 
@@ -76,9 +77,18 @@ Lista de prospectos (clientes potenciales), antes de que tengan una cotización 
 - **Persona de contacto, título/empresa, teléfono y correo**, con etiqueta de nivel de interés (Muy interesado / Interesado / Poco interesado).
 - **Próxima actividad**: fecha y nota de seguimiento — se avisa si no hay ninguna programada o si ya se venció.
 - Se puede crear un prospecto directamente aquí, o desde el modal "Generar cotización" (con los datos del cliente ya escritos ahí) — la cotización queda enlazada a ese prospecto, y se ve reflejado en esta pestaña.
+- Las etiquetas de interés se pueden crear propias además de las 3 que trae el sistema (opción "+ Crear etiqueta nueva…" en el formulario de prospecto), con el nombre y color que quieras.
+- **Botón de WhatsApp** por prospecto — abre el chat directo con un saludo ya escrito. Solo se activa si el teléfono tiene suficientes dígitos para verse completo; esto valida el *formato*, no confirma que la persona tenga WhatsApp instalado (eso no es posible verificarlo automáticamente sin la API paga de WhatsApp Business).
 - El teléfono queda guardado pensando en una futura integración con WhatsApp que actualice la próxima actividad sola — no implementada todavía.
 
-### 4. Tablero Kanban
+### 4. Calendario
+Vista de mes que reúne en un solo lugar:
+
+- **Eventos propios** (reuniones, visitas, instalaciones) — se crean con el botón "Evento" o al hacer clic en un día.
+- **Fechas límite de tareas del Tablero Kanban** (en morado) y **próxima actividad de prospectos del Pipeline** (en naranja) — aparecen solas, sin necesidad de crearlas dos veces.
+- **Conexión opcional con Google Calendar** (en verde): cada persona conecta su propia cuenta de Google con el botón "Conectar con Google Calendar" — los eventos que cree aquí se guardan también en su Google Calendar, y sus eventos de Google aparecen en este calendario. Requiere que un administrador de la cuenta de Google de la empresa cree unas credenciales gratuitas en Google Cloud una única vez (ver instrucciones aparte); mientras eso no esté hecho, el botón lo indica y el resto del calendario funciona igual.
+
+### 5. Tablero Kanban
 Tareas del equipo en cuatro columnas con color: **📋 Por hacer → 🚀 En progreso → 🔍 En revisión → 🎉 Hecho**.
 
 - **Equipo**: personas con nombre, cargo, foto de perfil (o iniciales de color) y teléfono.
@@ -87,7 +97,7 @@ Tareas del equipo en cuatro columnas con color: **📋 Por hacer → 🚀 En pro
 - Las tarjetas se mueven arrastrándolas entre columnas o editando la tarea.
 - Generar una cotización (ver Panel Cotizaciones) crea aquí sola una tarea de seguimiento para el responsable asignado.
 
-### 5. Tablero 3D
+### 6. Tablero 3D
 Planeación real de la ubicación de los equipos en el cuarto de máquinas:
 
 - Defines el **tamaño real del cuarto** (ancho, profundo, alto en metros).
@@ -95,7 +105,7 @@ Planeación real de la ubicación de los equipos en el cuarto de máquinas:
 - Los mueves, giras y escalas directamente con el mouse (gizmo tipo editor 3D), con las medidas en centímetros actualizándose en vivo.
 - Cámara libre o vista superior para revisar la posición exacta.
 
-### 6. Usuarios (solo administradores)
+### 7. Usuarios (solo administradores)
 Aprobar o rechazar solicitudes de acceso nuevas, asignar/cambiar el rol de cualquiera, o quitarle el acceso.
 
 ## Dónde vive la información
@@ -103,7 +113,8 @@ Aprobar o rechazar solicitudes de acceso nuevas, asignar/cambiar el rol de cualq
 | Dato | Dónde |
 |---|---|
 | Cuentas, aprobación y roles | Supabase Auth + tabla `profiles` |
-| Inventario, cotizaciones, prospectos (Pipeline), Kanban, Tablero 3D | Supabase (compartido por todo el equipo, en tiempo real) |
+| Inventario, cotizaciones, prospectos (Pipeline), Calendario, Kanban, Tablero 3D | Supabase (compartido por todo el equipo, en tiempo real) |
+| Token de conexión con Google Calendar | Solo en la pestaña del navegador de cada persona (dura ~1 hora, nunca se guarda en la base de datos) |
 | Tableros guardados ("Mis tableros") | `localStorage` (por navegador, no compartido todavía) |
 | Preferencias de ancho de paneles/columnas | `localStorage` (por navegador) |
 
