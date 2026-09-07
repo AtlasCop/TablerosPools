@@ -120,6 +120,17 @@ create table if not exists prospects (
 );
 create index if not exists prospects_createdat_idx on prospects ("createdAt" desc);
 
+-- Etiquetas de interés para prospectos, además de las 3 que trae el
+-- sistema por defecto (Muy interesado / Interesado / Poco interesado,
+-- que no viven en esta tabla — son fijas en el código). Cualquiera
+-- puede crear una etiqueta nueva desde el formulario de prospecto.
+create table if not exists prospect_tags (
+  id text primary key,
+  label text not null,
+  color text not null default 'slate',
+  "createdAt" bigint
+);
+
 -- Tareas del Tablero Kanban
 create table if not exists kanban_tasks (
   id text primary key,
@@ -246,6 +257,7 @@ alter table deleted_items enable row level security;
 alter table counters enable row level security;
 alter table quotes enable row level security;
 alter table prospects enable row level security;
+alter table prospect_tags enable row level security;
 alter table kanban_tasks enable row level security;
 alter table kanban_members enable row level security;
 alter table room3d enable row level security;
@@ -308,6 +320,16 @@ create policy "prospects: actualizar" on prospects for update to authenticated
   with check (public.current_user_role() in ('admin', 'editor', 'consulta'));
 drop policy if exists "prospects: eliminar" on prospects;
 create policy "prospects: eliminar" on prospects for delete to authenticated
+  using (public.current_user_role() in ('admin', 'editor'));
+
+-- prospect_tags (etiquetas personalizadas) — mismos permisos que prospects.
+drop policy if exists "prospect_tags: leer" on prospect_tags;
+create policy "prospect_tags: leer" on prospect_tags for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "prospect_tags: crear" on prospect_tags;
+create policy "prospect_tags: crear" on prospect_tags for insert to authenticated
+  with check (public.current_user_role() in ('admin', 'editor', 'consulta'));
+drop policy if exists "prospect_tags: eliminar" on prospect_tags;
+create policy "prospect_tags: eliminar" on prospect_tags for delete to authenticated
   using (public.current_user_role() in ('admin', 'editor'));
 
 -- kanban_tasks

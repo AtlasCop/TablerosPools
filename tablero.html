@@ -785,7 +785,8 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Teléfono</label>
-          <input id="prospectPhone" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+          <input id="prospectPhone" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Ej. 3001234567" />
+          <p id="prospectPhoneHint" class="hidden text-[10px] mt-1"></p>
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Correo</label>
@@ -818,6 +819,22 @@
         <button type="submit" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Guardar</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- NEW PROSPECT TAG MODAL -->
+<div id="prospectTagModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-xs p-5">
+    <h3 class="text-sm font-bold text-slate-800 mb-3">Nueva etiqueta</h3>
+    <label class="block text-xs font-medium text-slate-600 mb-1">Nombre</label>
+    <input id="prospectTagLabel" type="text" placeholder="Ej. Cliente antiguo" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 mb-3" />
+    <label class="block text-xs font-medium text-slate-600 mb-1.5">Color</label>
+    <div id="prospectTagColorSwatches" class="flex gap-2 mb-4"></div>
+    <p id="prospectTagModalError" class="hidden text-xs text-red-500 mb-2"></p>
+    <div class="flex gap-2">
+      <button type="button" id="prospectTagModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
+      <button type="button" id="prospectTagModalSave" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Crear etiqueta</button>
+    </div>
   </div>
 </div>
 
@@ -1289,6 +1306,12 @@ function idbGetAllProspects() {
 }
 function idbDeleteProspect(id) {
   return sb.from('prospects').delete().eq('id', id).then(sbResult).then(() => {});
+}
+function idbPutProspectTag(tag) {
+  return sb.from('prospect_tags').upsert(tag).then(sbResult).then(() => tag);
+}
+function idbGetAllProspectTags() {
+  return sb.from('prospect_tags').select('*').order('createdAt', { ascending: true }).then(sbResult);
 }
 function idbPutTask(task) {
   return sb.from('kanban_tasks').upsert(task).then(sbResult).then(() => task);
@@ -2932,13 +2955,108 @@ const PROSPECT_TAGS = [
   { id: 'interesado', label: 'Interesado', badge: 'bg-amber-100 text-amber-700' },
   { id: 'poco-interesado', label: 'Poco interesado', badge: 'bg-sky-100 text-sky-700' },
 ];
-function prospectTagInfo(tagId) { return PROSPECT_TAGS.find(t => t.id === tagId) || null; }
+/* Colores disponibles para etiquetas creadas por el usuario, además de
+   las 3 fijas de arriba — se guarda solo la llave ("red", "violet"...)
+   en prospect_tags.color, y aquí se traduce a las clases de Tailwind. */
+const PROSPECT_TAG_COLORS = {
+  red: { swatch: 'bg-red-400', badge: 'bg-red-100 text-red-700' },
+  amber: { swatch: 'bg-amber-400', badge: 'bg-amber-100 text-amber-700' },
+  sky: { swatch: 'bg-sky-400', badge: 'bg-sky-100 text-sky-700' },
+  emerald: { swatch: 'bg-emerald-400', badge: 'bg-emerald-100 text-emerald-700' },
+  violet: { swatch: 'bg-violet-400', badge: 'bg-violet-100 text-violet-700' },
+  slate: { swatch: 'bg-slate-400', badge: 'bg-slate-100 text-slate-700' },
+};
+let CUSTOM_PROSPECT_TAGS = [];
+function allProspectTags() {
+  return PROSPECT_TAGS.concat(CUSTOM_PROSPECT_TAGS.map(t => ({
+    id: t.id, label: t.label, badge: (PROSPECT_TAG_COLORS[t.color] || PROSPECT_TAG_COLORS.slate).badge,
+  })));
+}
+function prospectTagInfo(tagId) { return allProspectTags().find(t => t.id === tagId) || null; }
 function populateProspectTagSelects() {
-  const opts = PROSPECT_TAGS.map(t => `<option value="${t.id}">${escapeHtml(t.label)}</option>`).join('');
-  document.getElementById('prospectTag').innerHTML = '<option value="">Sin etiqueta</option>' + opts;
+  const opts = allProspectTags().map(t => `<option value="${t.id}">${escapeHtml(t.label)}</option>`).join('');
+  const prospectTagSel = document.getElementById('prospectTag');
+  const current = prospectTagSel.value;
+  prospectTagSel.innerHTML = '<option value="">Sin etiqueta</option>' + opts + '<option value="__new__">+ Crear etiqueta nueva…</option>';
+  if (allProspectTags().some(t => t.id === current)) prospectTagSel.value = current;
   document.getElementById('pipelineTagFilter').innerHTML = '<option value="">Todas las etiquetas</option>' + opts;
 }
 populateProspectTagSelects();
+idbGetAllProspectTags().then(tags => {
+  CUSTOM_PROSPECT_TAGS = tags;
+  populateProspectTagSelects();
+  if (!viewPipeline.classList.contains('hidden')) renderPipelineTableRows();
+}).catch((err) => console.warn('No se pudieron cargar las etiquetas de prospectos:', err && err.message));
+
+/* Al elegir "+ Crear etiqueta nueva…" en el select, se abre este mini
+   modal en vez de agregar la opción directo — así queda con un nombre
+   y un color, no solo un texto suelto. */
+let prospectTagSelectPrevValue = '';
+const prospectTagModal = document.getElementById('prospectTagModal');
+let prospectTagSelectedColor = 'sky';
+function renderProspectTagColorSwatches() {
+  const wrap = document.getElementById('prospectTagColorSwatches');
+  wrap.innerHTML = Object.keys(PROSPECT_TAG_COLORS).map(key => `
+    <button type="button" class="js-tag-color-swatch w-7 h-7 rounded-full ${PROSPECT_TAG_COLORS[key].swatch} ${key === prospectTagSelectedColor ? 'ring-2 ring-offset-2 ring-slate-400' : ''}" data-color="${key}"></button>
+  `).join('');
+  wrap.querySelectorAll('.js-tag-color-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      prospectTagSelectedColor = btn.dataset.color;
+      renderProspectTagColorSwatches();
+    });
+  });
+}
+function openProspectTagModal() {
+  document.getElementById('prospectTagLabel').value = '';
+  document.getElementById('prospectTagModalError').classList.add('hidden');
+  prospectTagSelectedColor = 'sky';
+  renderProspectTagColorSwatches();
+  prospectTagModal.classList.remove('hidden');
+}
+function closeProspectTagModal() { prospectTagModal.classList.add('hidden'); }
+document.getElementById('prospectTag').addEventListener('change', function() {
+  if (this.value === '__new__') {
+    prospectTagSelectPrevValue = prospectTagSelectPrevValue || '';
+    this.value = prospectTagSelectPrevValue;
+    openProspectTagModal();
+  } else {
+    prospectTagSelectPrevValue = this.value;
+  }
+});
+document.getElementById('prospectTagModalCancel').addEventListener('click', closeProspectTagModal);
+document.getElementById('prospectTagModalSave').addEventListener('click', () => {
+  const label = document.getElementById('prospectTagLabel').value.trim();
+  const errEl = document.getElementById('prospectTagModalError');
+  if (!label) { errEl.textContent = 'Escribe un nombre para la etiqueta.'; errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+  const tag = { id: 'ptag_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), label, color: prospectTagSelectedColor, createdAt: Date.now() };
+  idbPutProspectTag(tag).then(() => {
+    CUSTOM_PROSPECT_TAGS.push(tag);
+    populateProspectTagSelects();
+    document.getElementById('prospectTag').value = tag.id;
+    prospectTagSelectPrevValue = tag.id;
+    closeProspectTagModal();
+  }).catch((err) => { errEl.textContent = 'No se pudo crear: ' + (err && err.message || ''); errEl.classList.remove('hidden'); });
+});
+
+/* Validación de FORMATO del teléfono — no puede confirmar que el
+   número tenga WhatsApp de verdad (eso solo lo sabe la API paga de
+   WhatsApp Business, que no se tiene en este proyecto), solo detecta
+   números claramente incompletos o mal escritos. */
+function phoneDigits(phone) { return (phone || '').replace(/\D/g, ''); }
+function looksLikeValidPhone(phone) { return phoneDigits(phone).length >= 10; }
+document.getElementById('prospectPhone').addEventListener('input', function() {
+  const hint = document.getElementById('prospectPhoneHint');
+  if (!this.value.trim()) { hint.classList.add('hidden'); return; }
+  hint.classList.remove('hidden');
+  if (looksLikeValidPhone(this.value)) {
+    hint.textContent = '✓ El formato se ve bien (esto no confirma que tenga WhatsApp).';
+    hint.className = 'text-[10px] mt-1 text-emerald-600';
+  } else {
+    hint.textContent = '⚠ Parece incompleto — verifica el número.';
+    hint.className = 'text-[10px] mt-1 text-amber-600';
+  }
+});
 
 /* "Hoy" / "Mañana" / nombre del día / fecha corta, como en la
    referencia de Pipedrive — con aviso si no hay ninguna programada o
@@ -3004,6 +3122,13 @@ function renderPipelineTableRows() {
         ? linkedQuotes.map(q => `<div class="text-[10px] text-sky-600 font-medium">${escapeHtml(q.clientName || 'Cotización')} · ${formatCOP(q.grandTotal)}</div>`).join('')
         : '<span class="text-slate-300">—</span>'}</td>
       <td class="px-3 py-2.5 whitespace-nowrap">
+        ${looksLikeValidPhone(p.phone)
+          ? `<a class="js-prospect-whatsapp inline-flex p-1.5 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" title="Abrir chat de WhatsApp (no confirma que tenga WhatsApp instalado)" target="_blank" rel="noopener">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.92 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.05 2m0 1.67c2.2 0 4.26.86 5.82 2.42a8.19 8.19 0 0 1 2.41 5.82c0 4.55-3.7 8.25-8.24 8.25a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.18 8.18 0 0 1-1.26-4.38c0-4.55 3.7-8.25 8.25-8.25M8.53 6.6c-.16 0-.43.06-.66.31s-.87.86-.87 2.09.9 2.42 1.02 2.58 1.76 2.83 4.38 3.86c2.17.85 2.61.68 3.08.64s1.52-.62 1.74-1.22.22-1.11.15-1.22-.25-.17-.53-.31-1.63-.8-1.88-.9-.44-.13-.62.14-.7.9-.86 1.08-.32.2-.6.07-1.16-.43-2.2-1.36c-.82-.73-1.36-1.63-1.53-1.9s-.02-.43.12-.57c.13-.13.29-.34.43-.5s.19-.28.29-.47.05-.35-.02-.5-.62-1.5-.86-2.04-.46-.47-.63-.48h-.36z"/></svg>
+            </a>`
+          : `<span class="inline-flex p-1.5 text-slate-200" title="${p.phone ? 'El número no se ve completo' : 'Sin teléfono registrado'}">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.92 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.05 2m0 1.67c2.2 0 4.26.86 5.82 2.42a8.19 8.19 0 0 1 2.41 5.82c0 4.55-3.7 8.25-8.24 8.25a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.18 8.18 0 0 1-1.26-4.38c0-4.55 3.7-8.25 8.25-8.25M8.53 6.6c-.16 0-.43.06-.66.31s-.87.86-.87 2.09.9 2.42 1.02 2.58 1.76 2.83 4.38 3.86c2.17.85 2.61.68 3.08.64s1.52-.62 1.74-1.22.22-1.11.15-1.22-.25-.17-.53-.31-1.63-.8-1.88-.9-.44-.13-.62.14-.7.9-.86 1.08-.32.2-.6.07-1.16-.43-2.2-1.36c-.82-.73-1.36-1.63-1.53-1.9s-.02-.43.12-.57c.13-.13.29-.34.43-.5s.19-.28.29-.47.05-.35-.02-.5-.62-1.5-.86-2.04-.46-.47-.63-.48h-.36z"/></svg>
+            </span>`}
         <button class="js-prospect-edit p-1.5 rounded text-slate-400 hover:text-sky-600 hover:bg-sky-50" title="Editar">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -3012,6 +3137,9 @@ function renderPipelineTableRows() {
         </button>
       </td>
     `;
+    if (looksLikeValidPhone(p.phone)) {
+      tr.querySelector('.js-prospect-whatsapp').href = waReminderLink(p.phone, `Hola ${firstNameOf(p.contactName)}, te escribo de Aqua Bruma para dar seguimiento.`);
+    }
     tr.querySelector('.js-prospect-edit').addEventListener('click', () => openProspectModal('edit', p));
     tr.querySelector('.js-prospect-delete').addEventListener('click', () => {
       if (!confirm(`¿Eliminar el prospecto "${p.contactName}"? Esta acción no se puede deshacer.`)) return;
