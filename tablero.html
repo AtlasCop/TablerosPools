@@ -3369,12 +3369,9 @@ document.getElementById('btnCreateProspectFromQuote').addEventListener('click', 
    sesión. La conexión con Google usa Google Identity Services (OAuth
    2.0 solo del lado del navegador, sin backend) — el token que entrega
    dura ~1 hora y vive solo en esta pestaña, nunca en la base de datos;
-   cada quien conecta su propia cuenta de Google. GOOGLE_CALENDAR_CLIENT_ID
-   se deja vacío hasta que se creen las credenciales en Google Cloud
-   (instrucciones aparte) — mientras tanto, el botón explica que falta
-   configurarlo y todo lo demás del calendario funciona igual.
+   cada quien conecta su propia cuenta de Google.
 --------------------------------------------------------- */
-const GOOGLE_CALENDAR_CLIENT_ID = '';
+const GOOGLE_CALENDAR_CLIENT_ID = '796504028282-g79e1o0mlcdkao2gn0m0h9esgca3kaba.apps.googleusercontent.com';
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 let googleAccessToken = null;
 let googleTokenClient = null;
@@ -3577,8 +3574,8 @@ document.getElementById('calendarEventDeleteBtn').addEventListener('click', () =
 });
 
 /* ---------------------------------------------------------
-   Conexión con Google Calendar (opcional). Ver GOOGLE_CALENDAR_CLIENT_ID
-   arriba — mientras esté vacío, el botón solo explica que falta
+   Conexión con Google Calendar (opcional). Si GOOGLE_CALENDAR_CLIENT_ID
+   quedara vacío en alguna instalación, el botón solo explica que falta
    configurarlo y el resto del calendario sigue funcionando normal.
 --------------------------------------------------------- */
 function updateGoogleCalendarUI() {
