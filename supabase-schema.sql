@@ -131,6 +131,24 @@ create table if not exists prospect_tags (
   "createdAt" bigint
 );
 
+-- Eventos de la pestaña Calendario. "googleEventId" queda vacío para
+-- un evento creado solo aquí; se llena cuando el evento también existe
+-- en Google Calendar (creado desde aquí y empujado allá, o traído
+-- desde allá) — así una sincronización futura sabe cuáles ya están
+-- espejados y cuáles no, sin duplicar.
+create table if not exists calendar_events (
+  id text primary key,
+  title text not null,
+  description text,
+  location text,
+  "startAt" bigint not null,
+  "endAt" bigint,
+  "allDay" boolean default false,
+  "googleEventId" text,
+  "createdAt" bigint
+);
+create index if not exists calendar_events_startat_idx on calendar_events ("startAt");
+
 -- Tareas del Tablero Kanban
 create table if not exists kanban_tasks (
   id text primary key,
@@ -258,6 +276,7 @@ alter table counters enable row level security;
 alter table quotes enable row level security;
 alter table prospects enable row level security;
 alter table prospect_tags enable row level security;
+alter table calendar_events enable row level security;
 alter table kanban_tasks enable row level security;
 alter table kanban_members enable row level security;
 alter table room3d enable row level security;
@@ -331,6 +350,15 @@ create policy "prospect_tags: crear" on prospect_tags for insert to authenticate
 drop policy if exists "prospect_tags: eliminar" on prospect_tags;
 create policy "prospect_tags: eliminar" on prospect_tags for delete to authenticated
   using (public.current_user_role() in ('admin', 'editor'));
+
+-- calendar_events — mismos permisos que kanban_tasks (cualquiera
+-- aprobado ve el calendario, solo admin/editor crean/editan/eliminan).
+drop policy if exists "calendar_events: leer" on calendar_events;
+create policy "calendar_events: leer" on calendar_events for select to authenticated using (public.current_user_role() is not null);
+drop policy if exists "calendar_events: escribir" on calendar_events;
+create policy "calendar_events: escribir" on calendar_events for all to authenticated
+  using (public.current_user_role() in ('admin', 'editor'))
+  with check (public.current_user_role() in ('admin', 'editor'));
 
 -- kanban_tasks
 drop policy if exists "allow all - kanban_tasks" on kanban_tasks;

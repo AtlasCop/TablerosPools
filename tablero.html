@@ -43,6 +43,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   html, body { height: 100%; margin: 0; overflow: hidden; }
   #boardWrap { touch-action: none; }
@@ -240,6 +241,7 @@
     <button id="tabBtnInventario" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Inventario</button>
     <button id="tabBtnCotizaciones" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Panel Cotizaciones</button>
     <button id="tabBtnPipeline" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Pipeline</button>
+    <button id="tabBtnCalendario" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Calendario</button>
     <button id="tabBtnKanban" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero Kanban</button>
     <button id="tabBtnTablero3D" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero 3D</button>
     <button id="tabBtnUsuarios" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Usuarios</button>
@@ -459,6 +461,50 @@
         <tbody id="pipelineTableBody"></tbody>
       </table>
       <p id="pipelineTableEmpty" class="hidden text-center text-sm text-slate-400 py-16">Aún no hay prospectos — agrega uno con el botón "Prospecto", o crea uno desde una cotización nueva.</p>
+    </div>
+  </div>
+
+  <!-- CALENDARIO (eventos propios + fechas límite de Kanban + próxima actividad de Pipeline, opcionalmente sincronizado con Google Calendar) -->
+  <div id="viewCalendario" class="hidden flex-1 flex flex-col min-h-0 bg-slate-50">
+    <div class="px-6 pt-4 pb-3 border-b border-slate-200 bg-white shrink-0">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 class="text-sm font-bold text-slate-700">Calendario</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Eventos del equipo, fechas límite de tareas y próximas actividades de prospectos, todo en un solo lugar.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btnGoogleCalendarConnect" type="button" class="text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg>
+            <span id="btnGoogleCalendarConnectLabel">Conectar con Google Calendar</span>
+          </button>
+          <button id="btnAddCalendarEvent" type="button" class="text-xs px-3 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white font-medium flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            Evento
+          </button>
+        </div>
+      </div>
+      <p id="googleCalendarStatus" class="hidden text-[10px] mt-2"></p>
+      <div class="flex items-center gap-2 mt-3">
+        <button id="btnCalendarPrevMonth" class="p-1.5 rounded hover:bg-slate-100 text-slate-500">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="btnCalendarNextMonth" class="p-1.5 rounded hover:bg-slate-100 text-slate-500">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <h3 id="calendarMonthLabel" class="text-sm font-bold text-slate-700"></h3>
+        <button id="btnCalendarToday" class="ml-2 text-xs px-2.5 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">Hoy</button>
+        <div class="flex-1"></div>
+        <div class="flex items-center gap-3 text-[10px] text-slate-500">
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-500"></span>Evento</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-violet-500"></span>Tarea Kanban</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Prospecto</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Google</span>
+        </div>
+      </div>
+    </div>
+    <div class="flex-1 overflow-auto p-3">
+      <div id="calendarWeekdaysRow" class="grid grid-cols-7 text-center text-[10px] font-semibold text-slate-400 uppercase mb-1"></div>
+      <div id="calendarGrid" class="grid grid-cols-7 gap-1"></div>
     </div>
   </div>
 
@@ -835,6 +881,73 @@
       <button type="button" id="prospectTagModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
       <button type="button" id="prospectTagModalSave" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Crear etiqueta</button>
     </div>
+  </div>
+</div>
+
+<!-- CALENDAR DAY DETAIL MODAL -->
+<div id="calendarDayModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col max-h-full">
+    <div class="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+      <h3 id="calendarDayModalTitle" class="text-sm font-bold text-slate-800"></h3>
+      <button id="calendarDayModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    </div>
+    <div id="calendarDayModalList" class="px-5 pb-3 space-y-2 overflow-y-auto"></div>
+    <div class="px-5 pb-5 pt-1 shrink-0">
+      <button type="button" id="calendarDayModalAddBtn" class="w-full text-xs px-3 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white font-medium flex items-center justify-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+        Agregar evento este día
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDAR EVENT (ADD/EDIT) MODAL -->
+<div id="calendarEventModal" class="hidden fixed inset-0 z-[55] flex items-center justify-center bg-black/50 px-4 py-8">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-full">
+    <div class="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+      <h3 id="calendarEventModalTitle" class="text-sm font-bold text-slate-800">Agregar evento</h3>
+      <button id="calendarEventModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    </div>
+    <form id="calendarEventForm" class="px-5 pb-5 space-y-3 overflow-y-auto">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Título</label>
+        <input id="calendarEventTitle" type="text" required class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" placeholder="Ej. Visita técnica" />
+      </div>
+      <div class="flex items-center gap-2">
+        <input id="calendarEventAllDay" type="checkbox" class="rounded" />
+        <label for="calendarEventAllDay" class="text-xs text-slate-600">Todo el día</label>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Fecha</label>
+          <input id="calendarEventDate" type="date" required class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+        </div>
+        <div id="calendarEventTimeWrap" class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Desde</label>
+            <input id="calendarEventStartTime" type="time" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
+            <input id="calendarEventEndTime" type="time" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+          </div>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Lugar (opcional)</label>
+        <input id="calendarEventLocation" type="text" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Descripción (opcional)</label>
+        <textarea id="calendarEventDescription" rows="3" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400"></textarea>
+      </div>
+      <p id="calendarEventFormError" class="hidden text-xs text-red-500"></p>
+      <div class="flex gap-2 pt-1">
+        <button type="button" id="calendarEventDeleteBtn" class="hidden text-xs px-3 py-2 rounded border border-red-200 text-red-500 hover:bg-red-50">Eliminar</button>
+        <button type="button" id="calendarEventModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
+        <button type="submit" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Guardar</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1312,6 +1425,15 @@ function idbPutProspectTag(tag) {
 }
 function idbGetAllProspectTags() {
   return sb.from('prospect_tags').select('*').order('createdAt', { ascending: true }).then(sbResult);
+}
+function idbPutCalendarEvent(event) {
+  return sb.from('calendar_events').upsert(event).then(sbResult).then(() => event);
+}
+function idbGetAllCalendarEvents() {
+  return sb.from('calendar_events').select('*').order('startAt', { ascending: true }).then(sbResult);
+}
+function idbDeleteCalendarEvent(id) {
+  return sb.from('calendar_events').delete().eq('id', id).then(sbResult).then(() => {});
 }
 function idbPutTask(task) {
   return sb.from('kanban_tasks').upsert(task).then(sbResult).then(() => task);
@@ -2294,6 +2416,7 @@ const viewProductos = document.getElementById('viewProductos');
 const viewInventario = document.getElementById('viewInventario');
 const viewCotizaciones = document.getElementById('viewCotizaciones');
 const viewPipeline = document.getElementById('viewPipeline');
+const viewCalendario = document.getElementById('viewCalendario');
 const viewKanban = document.getElementById('viewKanban');
 const viewTablero3D = document.getElementById('viewTablero3D');
 const viewUsuarios = document.getElementById('viewUsuarios');
@@ -2301,6 +2424,7 @@ const tabBtnProductos = document.getElementById('tabBtnProductos');
 const tabBtnInventario = document.getElementById('tabBtnInventario');
 const tabBtnCotizaciones = document.getElementById('tabBtnCotizaciones');
 const tabBtnPipeline = document.getElementById('tabBtnPipeline');
+const tabBtnCalendario = document.getElementById('tabBtnCalendario');
 const tabBtnKanban = document.getElementById('tabBtnKanban');
 const tabBtnTablero3D = document.getElementById('tabBtnTablero3D');
 const tabBtnUsuarios = document.getElementById('tabBtnUsuarios');
@@ -2309,6 +2433,7 @@ const TAB_VIEWS = {
   inventario: { view: viewInventario, btn: tabBtnInventario },
   cotizaciones: { view: viewCotizaciones, btn: tabBtnCotizaciones },
   pipeline: { view: viewPipeline, btn: tabBtnPipeline },
+  calendario: { view: viewCalendario, btn: tabBtnCalendario },
   kanban: { view: viewKanban, btn: tabBtnKanban },
   tablero3d: { view: viewTablero3D, btn: tabBtnTablero3D },
   usuarios: { view: viewUsuarios, btn: tabBtnUsuarios },
@@ -2328,6 +2453,7 @@ function setActiveTab(tab) {
   else if (tab === 'inventario') renderInventoryTable();
   else if (tab === 'cotizaciones') renderQuotesPanel();
   else if (tab === 'pipeline') renderPipelinePanel();
+  else if (tab === 'calendario') renderCalendarPanel();
   else if (tab === 'kanban') refreshKanbanData();
   else if (tab === 'tablero3d') requestAnimationFrame(activate3DRoom);
   else if (tab === 'usuarios') renderUsersPanel();
@@ -2344,6 +2470,7 @@ tabBtnProductos.addEventListener('click', () => {
 tabBtnInventario.addEventListener('click', () => setActiveTab('inventario'));
 tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
 tabBtnPipeline.addEventListener('click', () => setActiveTab('pipeline'));
+tabBtnCalendario.addEventListener('click', () => setActiveTab('calendario'));
 tabBtnKanban.addEventListener('click', () => setActiveTab('kanban'));
 tabBtnTablero3D.addEventListener('click', () => setActiveTab('tablero3d'));
 tabBtnUsuarios.addEventListener('click', () => setActiveTab('usuarios'));
@@ -3234,6 +3361,305 @@ document.getElementById('btnCreateProspectFromQuote').addEventListener('click', 
     document.getElementById('quoteProspectSelect').value = prospect.id;
   });
 });
+
+/* ---------------------------------------------------------
+   CALENDARIO — vista de mes con: eventos propios, fechas límite de
+   tareas del Tablero Kanban, próxima actividad de prospectos (Pipeline)
+   y, si está conectado, eventos del Google Calendar de quien inició
+   sesión. La conexión con Google usa Google Identity Services (OAuth
+   2.0 solo del lado del navegador, sin backend) — el token que entrega
+   dura ~1 hora y vive solo en esta pestaña, nunca en la base de datos;
+   cada quien conecta su propia cuenta de Google. GOOGLE_CALENDAR_CLIENT_ID
+   se deja vacío hasta que se creen las credenciales en Google Cloud
+   (instrucciones aparte) — mientras tanto, el botón explica que falta
+   configurarlo y todo lo demás del calendario funciona igual.
+--------------------------------------------------------- */
+const GOOGLE_CALENDAR_CLIENT_ID = '';
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+let googleAccessToken = null;
+let googleTokenClient = null;
+try { googleAccessToken = sessionStorage.getItem('google_calendar_token') || null; } catch {}
+
+function dateKey(d) {
+  // YYYY-MM-DD en hora LOCAL — evitar toISOString(), que pasa a UTC y
+  // puede correr la fecha un día según la zona horaria de quien mire.
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// Solo la primera letra en mayúscula — la clase Tailwind "capitalize"
+// pone mayúscula en CADA palabra ("Septiembre De 2026"), no solo la
+// primera, así que se hace a mano en vez de con CSS.
+function capitalizeFirst(str) { return str ? str.charAt(0).toUpperCase() + str.slice(1) : str; }
+
+const CALENDAR_COLOR_DOT = { sky: 'bg-sky-500', violet: 'bg-violet-500', amber: 'bg-amber-500', emerald: 'bg-emerald-500' };
+const CALENDAR_COLOR_CHIP = { sky: 'bg-sky-50 text-sky-700', violet: 'bg-violet-50 text-violet-700', amber: 'bg-amber-50 text-amber-700', emerald: 'bg-emerald-50 text-emerald-700' };
+const CALENDAR_KIND_LABEL = { event: 'Evento', google: 'Google', kanban: 'Tarea Kanban', prospect: 'Prospecto' };
+
+let CALENDAR_EVENTS = [];
+let calendarViewDate = new Date();
+calendarViewDate.setDate(1);
+document.getElementById('calendarWeekdaysRow').innerHTML = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => `<div>${d}</div>`).join('');
+
+function buildCalendarItems(events, tasks, prospects, googleEvents) {
+  const items = [];
+  events.forEach(e => items.push({ kind: e.googleEventId ? 'google' : 'event', id: e.id, title: e.title, startAt: e.startAt, allDay: !!e.allDay, color: e.googleEventId ? 'emerald' : 'sky', raw: e }));
+  tasks.forEach(t => {
+    if (!t.dueDate) return;
+    items.push({ kind: 'kanban', id: 'k_' + t.id, title: t.title, startAt: new Date(t.dueDate + 'T12:00:00').getTime(), allDay: true, color: 'violet', raw: t });
+  });
+  prospects.forEach(p => {
+    if (!p.nextActivityAt) return;
+    items.push({ kind: 'prospect', id: 'p_' + p.id, title: p.contactName + (p.nextActivityNote ? ' — ' + p.nextActivityNote : ''), startAt: p.nextActivityAt, allDay: true, color: 'amber', raw: p });
+  });
+  (googleEvents || []).forEach(ge => items.push({ kind: 'google', id: ge.id, title: ge.title, startAt: ge.startAt, allDay: ge.allDay, location: ge.location, color: 'emerald', raw: ge }));
+  return items;
+}
+function groupCalendarItemsByDay(items) {
+  const map = {};
+  items.forEach(it => { const key = dateKey(new Date(it.startAt)); (map[key] = map[key] || []).push(it); });
+  Object.values(map).forEach(list => list.sort((a, b) => a.startAt - b.startAt));
+  return map;
+}
+
+function renderCalendarGrid(itemsByDay) {
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = '';
+  const year = calendarViewDate.getFullYear();
+  const month = calendarViewDate.getMonth();
+  document.getElementById('calendarMonthLabel').textContent = capitalizeFirst(calendarViewDate.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }));
+
+  const firstOfMonth = new Date(year, month, 1);
+  const startDow = firstOfMonth.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - startDow + 1;
+    const cellDate = new Date(year, month, dayNum);
+    const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+    const key = dateKey(cellDate);
+    const dayItems = itemsByDay[key] || [];
+    const isToday = cellDate.getTime() === today.getTime();
+
+    const cell = document.createElement('div');
+    cell.className = 'min-h-[86px] rounded-lg border p-1.5 cursor-pointer transition ' +
+      (inMonth ? 'bg-white border-slate-200 hover:border-sky-300' : 'bg-slate-50 border-slate-100') +
+      (isToday ? ' ring-2 ring-sky-400' : '');
+    const shown = dayItems.slice(0, 3);
+    const extra = dayItems.length - shown.length;
+    cell.innerHTML = `
+      <div class="text-[11px] font-semibold mb-1 ${isToday ? 'text-sky-600' : inMonth ? 'text-slate-600' : 'text-slate-300'}">${cellDate.getDate()}</div>
+      <div class="space-y-0.5">
+        ${shown.map(it => `<div class="text-[9px] truncate px-1 py-0.5 rounded flex items-center gap-1 ${CALENDAR_COLOR_CHIP[it.color]}"><span class="w-1.5 h-1.5 rounded-full shrink-0 ${CALENDAR_COLOR_DOT[it.color]}"></span>${escapeHtml(it.title)}</div>`).join('')}
+        ${extra > 0 ? `<div class="text-[9px] text-slate-400 pl-1">+${extra} más</div>` : ''}
+      </div>
+    `;
+    cell.addEventListener('click', () => openCalendarDayModal(cellDate, dayItems));
+    grid.appendChild(cell);
+  }
+}
+
+function renderCalendarPanel() {
+  return Promise.all([
+    idbGetAllCalendarEvents(),
+    idbGetAllTasks(),
+    idbGetAllProspects(),
+    fetchGoogleCalendarEvents(),
+  ]).then(([events, tasks, prospects, googleEvents]) => {
+    CALENDAR_EVENTS = events;
+    renderCalendarGrid(groupCalendarItemsByDay(buildCalendarItems(events, tasks, prospects, googleEvents)));
+  }).catch((err) => console.warn('No se pudo cargar el calendario:', err && err.message));
+}
+
+document.getElementById('btnCalendarPrevMonth').addEventListener('click', () => { calendarViewDate.setMonth(calendarViewDate.getMonth() - 1); renderCalendarPanel(); });
+document.getElementById('btnCalendarNextMonth').addEventListener('click', () => { calendarViewDate.setMonth(calendarViewDate.getMonth() + 1); renderCalendarPanel(); });
+document.getElementById('btnCalendarToday').addEventListener('click', () => { calendarViewDate = new Date(); calendarViewDate.setDate(1); renderCalendarPanel(); });
+
+/* Modal de detalle del día — se abre al hacer clic en una celda. */
+const calendarDayModal = document.getElementById('calendarDayModal');
+function openCalendarDayModal(date, items) {
+  document.getElementById('calendarDayModalTitle').textContent = capitalizeFirst(date.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }));
+  const list = document.getElementById('calendarDayModalList');
+  list.innerHTML = items.length ? '' : '<p class="text-xs text-slate-400 text-center py-4">Sin nada programado este día.</p>';
+  items.forEach(it => {
+    const row = document.createElement('div');
+    const clickable = it.kind === 'event';
+    row.className = 'rounded-lg border border-slate-200 p-2.5' + (clickable ? ' cursor-pointer hover:border-sky-300' : '');
+    const timeLabel = it.allDay ? 'Todo el día' : new Date(it.startAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    const location = it.raw && it.raw.location;
+    row.innerHTML = `
+      <div class="flex items-center gap-1.5 mb-0.5">
+        <span class="w-2 h-2 rounded-full shrink-0 ${CALENDAR_COLOR_DOT[it.color]}"></span>
+        <span class="text-[10px] font-semibold uppercase text-slate-400">${CALENDAR_KIND_LABEL[it.kind]}</span>
+      </div>
+      <div class="text-xs font-medium text-slate-700">${escapeHtml(it.title)}</div>
+      <div class="text-[10px] text-slate-400 mt-0.5">${timeLabel}${location ? ' · ' + escapeHtml(location) : ''}</div>
+    `;
+    if (clickable) row.addEventListener('click', () => { closeCalendarDayModal(); openCalendarEventModal('edit', it.raw); });
+    list.appendChild(row);
+  });
+  document.getElementById('calendarDayModalAddBtn').onclick = () => { closeCalendarDayModal(); openCalendarEventModal('add', null, date); };
+  calendarDayModal.classList.remove('hidden');
+}
+function closeCalendarDayModal() { calendarDayModal.classList.add('hidden'); }
+document.getElementById('calendarDayModalClose').addEventListener('click', closeCalendarDayModal);
+
+/* Modal de agregar/editar evento propio (no aplica a tareas Kanban ni
+   a prospectos — esos se editan desde su propia pestaña). */
+let calendarEventEditingId = null;
+const calendarEventModal = document.getElementById('calendarEventModal');
+function toggleCalendarEventTimeFields() {
+  document.getElementById('calendarEventTimeWrap').classList.toggle('hidden', document.getElementById('calendarEventAllDay').checked);
+}
+document.getElementById('calendarEventAllDay').addEventListener('change', toggleCalendarEventTimeFields);
+function openCalendarEventModal(mode, existing, presetDate) {
+  calendarEventEditingId = mode === 'edit' && existing ? existing.id : null;
+  document.getElementById('calendarEventModalTitle').textContent = mode === 'edit' ? 'Editar evento' : 'Agregar evento';
+  document.getElementById('calendarEventFormError').classList.add('hidden');
+  document.getElementById('calendarEventForm').reset();
+  document.getElementById('calendarEventDeleteBtn').classList.toggle('hidden', mode !== 'edit');
+  if (mode === 'edit' && existing) {
+    document.getElementById('calendarEventTitle').value = existing.title || '';
+    document.getElementById('calendarEventDescription').value = existing.description || '';
+    document.getElementById('calendarEventLocation').value = existing.location || '';
+    document.getElementById('calendarEventAllDay').checked = !!existing.allDay;
+    document.getElementById('calendarEventDate').value = dateKey(new Date(existing.startAt));
+    if (!existing.allDay) {
+      document.getElementById('calendarEventStartTime').value = new Date(existing.startAt).toTimeString().slice(0, 5);
+      if (existing.endAt) document.getElementById('calendarEventEndTime').value = new Date(existing.endAt).toTimeString().slice(0, 5);
+    }
+  } else {
+    document.getElementById('calendarEventDate').value = dateKey(presetDate || new Date());
+  }
+  toggleCalendarEventTimeFields();
+  calendarEventModal.classList.remove('hidden');
+}
+function closeCalendarEventModal() { calendarEventModal.classList.add('hidden'); }
+document.getElementById('calendarEventModalClose').addEventListener('click', closeCalendarEventModal);
+document.getElementById('calendarEventModalCancel').addEventListener('click', closeCalendarEventModal);
+document.getElementById('btnAddCalendarEvent').addEventListener('click', () => openCalendarEventModal('add', null, new Date()));
+
+document.getElementById('calendarEventForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const title = document.getElementById('calendarEventTitle').value.trim();
+  const dateStr = document.getElementById('calendarEventDate').value;
+  const errEl = document.getElementById('calendarEventFormError');
+  if (!title || !dateStr) { errEl.textContent = 'El título y la fecha son obligatorios.'; errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+  const allDay = document.getElementById('calendarEventAllDay').checked;
+  const startTime = document.getElementById('calendarEventStartTime').value || '09:00';
+  const endTime = document.getElementById('calendarEventEndTime').value;
+  const startAt = allDay ? new Date(dateStr + 'T00:00:00').getTime() : new Date(dateStr + 'T' + startTime + ':00').getTime();
+  const endAt = allDay ? null : (endTime ? new Date(dateStr + 'T' + endTime + ':00').getTime() : null);
+  const existing = calendarEventEditingId ? CALENDAR_EVENTS.find(ev => ev.id === calendarEventEditingId) : null;
+  const event = {
+    id: calendarEventEditingId || ('event_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+    title,
+    description: document.getElementById('calendarEventDescription').value.trim(),
+    location: document.getElementById('calendarEventLocation').value.trim(),
+    startAt, endAt, allDay,
+    googleEventId: existing ? existing.googleEventId : null,
+    createdAt: existing ? existing.createdAt : Date.now(),
+  };
+  idbPutCalendarEvent(event).then(() => {
+    closeCalendarEventModal();
+    renderCalendarPanel();
+    return pushEventToGoogleIfConnected(event).catch((err) => console.warn('No se pudo enviar el evento a Google Calendar:', err && err.message));
+  });
+});
+document.getElementById('calendarEventDeleteBtn').addEventListener('click', () => {
+  if (!calendarEventEditingId) return;
+  if (!confirm('¿Eliminar este evento?')) return;
+  idbDeleteCalendarEvent(calendarEventEditingId).then(() => {
+    closeCalendarEventModal();
+    renderCalendarPanel();
+  });
+});
+
+/* ---------------------------------------------------------
+   Conexión con Google Calendar (opcional). Ver GOOGLE_CALENDAR_CLIENT_ID
+   arriba — mientras esté vacío, el botón solo explica que falta
+   configurarlo y el resto del calendario sigue funcionando normal.
+--------------------------------------------------------- */
+function updateGoogleCalendarUI() {
+  const label = document.getElementById('btnGoogleCalendarConnectLabel');
+  const statusEl = document.getElementById('googleCalendarStatus');
+  if (!GOOGLE_CALENDAR_CLIENT_ID) {
+    label.textContent = 'Conectar con Google Calendar';
+    statusEl.textContent = 'Esta conexión todavía no está configurada — falta crear las credenciales en Google Cloud.';
+    statusEl.className = 'text-[10px] mt-2 text-slate-400';
+    statusEl.classList.remove('hidden');
+  } else if (googleAccessToken) {
+    label.textContent = 'Google Calendar conectado';
+    statusEl.textContent = '✓ Conectado — los eventos que crees aquí también se guardan en tu Google Calendar, y los tuyos de Google aparecen en este calendario.';
+    statusEl.className = 'text-[10px] mt-2 text-emerald-600';
+    statusEl.classList.remove('hidden');
+  } else {
+    label.textContent = 'Conectar con Google Calendar';
+    statusEl.classList.add('hidden');
+  }
+}
+function initGoogleCalendarClient() {
+  if (!GOOGLE_CALENDAR_CLIENT_ID || !window.google || !window.google.accounts) return;
+  googleTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CALENDAR_CLIENT_ID,
+    scope: GOOGLE_CALENDAR_SCOPE,
+    callback: (resp) => {
+      if (resp && resp.access_token) {
+        googleAccessToken = resp.access_token;
+        try { sessionStorage.setItem('google_calendar_token', resp.access_token); } catch {}
+        updateGoogleCalendarUI();
+        renderCalendarPanel();
+      }
+    },
+  });
+}
+document.getElementById('btnGoogleCalendarConnect').addEventListener('click', () => {
+  if (!GOOGLE_CALENDAR_CLIENT_ID) {
+    alert('La conexión con Google Calendar todavía no está configurada en esta instalación — faltan las credenciales de Google Cloud.');
+    return;
+  }
+  if (!googleTokenClient) initGoogleCalendarClient();
+  if (googleTokenClient) googleTokenClient.requestAccessToken({ prompt: googleAccessToken ? '' : 'consent' });
+});
+function fetchGoogleCalendarEvents() {
+  if (!googleAccessToken) return Promise.resolve([]);
+  const timeMin = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1).toISOString();
+  const timeMax = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 2, 0).toISOString();
+  return fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`, {
+    headers: { Authorization: 'Bearer ' + googleAccessToken },
+  }).then(res => {
+    if (!res.ok) {
+      if (res.status === 401) { googleAccessToken = null; try { sessionStorage.removeItem('google_calendar_token'); } catch {} updateGoogleCalendarUI(); }
+      return { items: [] };
+    }
+    return res.json();
+  }).then(data => (data.items || []).map(ev => ({
+    id: 'google_' + ev.id,
+    googleEventId: ev.id,
+    title: ev.summary || '(sin título)',
+    startAt: ev.start.dateTime ? new Date(ev.start.dateTime).getTime() : new Date(ev.start.date + 'T00:00:00').getTime(),
+    allDay: !ev.start.dateTime,
+    location: ev.location || '',
+  }))).catch(() => []);
+}
+function pushEventToGoogleIfConnected(event) {
+  if (!googleAccessToken || event.googleEventId) return Promise.resolve();
+  const body = event.allDay
+    ? { summary: event.title, description: event.description, location: event.location, start: { date: dateKey(new Date(event.startAt)) }, end: { date: dateKey(new Date(event.startAt)) } }
+    : { summary: event.title, description: event.description, location: event.location,
+        start: { dateTime: new Date(event.startAt).toISOString() },
+        end: { dateTime: new Date(event.endAt || event.startAt + 3600000).toISOString() } };
+  return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(res => res.ok ? res.json() : null).then(created => {
+    if (created && created.id) { event.googleEventId = created.id; return idbPutCalendarEvent(event); }
+  });
+}
+updateGoogleCalendarUI();
+if (GOOGLE_CALENDAR_CLIENT_ID) initGoogleCalendarClient();
 
 /* ---------------------------------------------------------
    EDITAR UNA COTIZACIÓN YA GUARDADA — a diferencia de "Generar
