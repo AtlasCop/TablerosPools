@@ -116,9 +116,14 @@ create table if not exists prospects (
   notes text,
   "nextActivityAt" bigint,
   "nextActivityNote" text,
-  "createdAt" bigint
+  "createdAt" bigint,
+  "ownerId" text,
+  "ownerName" text
 );
 create index if not exists prospects_createdat_idx on prospects ("createdAt" desc);
+-- Por si la tabla ya existía de una corrida anterior de este script:
+alter table prospects add column if not exists "ownerId" text;
+alter table prospects add column if not exists "ownerName" text;
 
 -- Etiquetas de interés para prospectos, además de las 3 que trae el
 -- sistema por defecto (Muy interesado / Interesado / Poco interesado,

@@ -85,9 +85,10 @@
   body.role-consulta #btnAddItem,
   body.role-consulta .js-edit-item,
   body.role-consulta .js-delete-item,
-  body.role-consulta #btnAddKanbanMember,
+  body.role-consulta #btnAddEquipoMember,
+  body.role-consulta .js-equipo-edit,
+  body.role-consulta .js-equipo-delete,
   body.role-consulta #btnAddKanbanTask,
-  body.role-consulta .js-remove-member,
   body.role-consulta .js-comment-delete,
   body.role-consulta .js-write-only,
   body.role-consulta #btn3DAddEquip,
@@ -243,6 +244,7 @@
     <button id="tabBtnPipeline" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Pipeline</button>
     <button id="tabBtnCalendario" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Calendario</button>
     <button id="tabBtnKanban" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero Kanban</button>
+    <button id="tabBtnEquipo" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Equipo Comercial</button>
     <button id="tabBtnTablero3D" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero 3D</button>
     <button id="tabBtnUsuarios" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Usuarios</button>
   </div>
@@ -517,19 +519,34 @@
           <p class="text-[11px] text-slate-400 mt-0.5 max-w-md">Arrastra cada tarjeta entre columnas para actualizar su estado. Asigna cada tarea a un integrante del equipo para saber quién es responsable.</p>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <button id="btnAddKanbanMember" class="text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M17 8h5M19.5 5.5v5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Agregar persona
-          </button>
           <button id="btnAddKanbanTask" class="text-xs font-semibold px-3 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white flex items-center gap-1.5">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
             Nueva tarea
           </button>
         </div>
       </div>
-      <div id="kanbanMembersBar" class="flex items-center gap-2 flex-wrap mt-3"></div>
     </div>
     <div id="kanbanColumnsWrap" class="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4"></div>
+  </div>
+
+  <!-- EQUIPO COMERCIAL (personas del equipo, con lo que tiene asignado en Kanban/Cotizaciones/Pipeline) -->
+  <div id="viewEquipo" class="hidden flex-1 overflow-y-auto bg-slate-50">
+    <div class="px-6 pt-4 pb-3 border-b border-slate-200 bg-white sticky top-0 z-10">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 class="text-sm font-bold text-slate-700">Equipo Comercial</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5 max-w-md">Personas del equipo — se usan para asignar tareas del Kanban, responsables de cotizaciones y prospectos.</p>
+        </div>
+        <button id="btnAddEquipoMember" type="button" class="text-xs px-3 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white font-medium flex items-center gap-1.5 shrink-0">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M17 8h5M19.5 5.5v5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Agregar persona
+        </button>
+      </div>
+    </div>
+    <div class="p-6">
+      <div id="equipoGrid" class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"></div>
+      <p id="equipoEmpty" class="hidden text-center text-sm text-slate-400 py-16">Aún no hay nadie en el equipo — agrega una persona con el botón de arriba.</p>
+    </div>
   </div>
 
   <!-- TABLERO 3D (planear la ubicación real de los equipos en el cuarto de máquinas) -->
@@ -845,6 +862,12 @@
           <option value="">Sin etiqueta</option>
         </select>
       </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Responsable (opcional)</label>
+        <select id="prospectOwner" class="w-full text-sm border border-slate-200 rounded px-2 py-2 outline-none focus:ring-1 focus:ring-sky-400 bg-white">
+          <option value="">Sin asignar</option>
+        </select>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Próxima actividad</label>
@@ -1092,7 +1115,7 @@
 <div id="kanbanMemberModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-5">
     <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-bold text-slate-800">Agregar persona al equipo</h3>
+      <h3 id="kanbanMemberModalTitle" class="text-sm font-bold text-slate-800">Agregar persona al equipo</h3>
       <button id="kanbanMemberModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
     </div>
     <form id="kanbanMemberForm" class="space-y-3">
@@ -2439,6 +2462,7 @@ const viewCotizaciones = document.getElementById('viewCotizaciones');
 const viewPipeline = document.getElementById('viewPipeline');
 const viewCalendario = document.getElementById('viewCalendario');
 const viewKanban = document.getElementById('viewKanban');
+const viewEquipo = document.getElementById('viewEquipo');
 const viewTablero3D = document.getElementById('viewTablero3D');
 const viewUsuarios = document.getElementById('viewUsuarios');
 const tabBtnProductos = document.getElementById('tabBtnProductos');
@@ -2447,6 +2471,7 @@ const tabBtnCotizaciones = document.getElementById('tabBtnCotizaciones');
 const tabBtnPipeline = document.getElementById('tabBtnPipeline');
 const tabBtnCalendario = document.getElementById('tabBtnCalendario');
 const tabBtnKanban = document.getElementById('tabBtnKanban');
+const tabBtnEquipo = document.getElementById('tabBtnEquipo');
 const tabBtnTablero3D = document.getElementById('tabBtnTablero3D');
 const tabBtnUsuarios = document.getElementById('tabBtnUsuarios');
 const TAB_VIEWS = {
@@ -2456,6 +2481,7 @@ const TAB_VIEWS = {
   pipeline: { view: viewPipeline, btn: tabBtnPipeline },
   calendario: { view: viewCalendario, btn: tabBtnCalendario },
   kanban: { view: viewKanban, btn: tabBtnKanban },
+  equipo: { view: viewEquipo, btn: tabBtnEquipo },
   tablero3d: { view: viewTablero3D, btn: tabBtnTablero3D },
   usuarios: { view: viewUsuarios, btn: tabBtnUsuarios },
 };
@@ -2476,6 +2502,7 @@ function setActiveTab(tab) {
   else if (tab === 'pipeline') renderPipelinePanel();
   else if (tab === 'calendario') renderCalendarPanel();
   else if (tab === 'kanban') refreshKanbanData();
+  else if (tab === 'equipo') renderEquipoPanel();
   else if (tab === 'tablero3d') requestAnimationFrame(activate3DRoom);
   else if (tab === 'usuarios') renderUsersPanel();
 }
@@ -2493,6 +2520,7 @@ tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'))
 tabBtnPipeline.addEventListener('click', () => setActiveTab('pipeline'));
 tabBtnCalendario.addEventListener('click', () => setActiveTab('calendario'));
 tabBtnKanban.addEventListener('click', () => setActiveTab('kanban'));
+tabBtnEquipo.addEventListener('click', () => setActiveTab('equipo'));
 tabBtnTablero3D.addEventListener('click', () => setActiveTab('tablero3d'));
 tabBtnUsuarios.addEventListener('click', () => setActiveTab('usuarios'));
 
@@ -3228,8 +3256,9 @@ function nextActivityLabel(prospect) {
 let PIPELINE_PROSPECTS = [];
 let PIPELINE_QUOTES_BY_PROSPECT = {};
 function renderPipelinePanel() {
-  return Promise.all([idbGetAllProspects(), idbGetAllQuotes()]).then(([prospects, quotes]) => {
+  return Promise.all([idbGetAllProspects(), idbGetAllQuotes(), idbGetAllMembers()]).then(([prospects, quotes, members]) => {
     PIPELINE_PROSPECTS = prospects;
+    KANBAN_MEMBERS = members;
     PIPELINE_QUOTES_BY_PROSPECT = {};
     quotes.forEach(q => {
       if (q.prospectId) (PIPELINE_QUOTES_BY_PROSPECT[q.prospectId] = PIPELINE_QUOTES_BY_PROSPECT[q.prospectId] || []).push(q);
@@ -3259,8 +3288,12 @@ function renderPipelineTableRows() {
     const activity = nextActivityLabel(p);
     const linkedQuotes = PIPELINE_QUOTES_BY_PROSPECT[p.id] || [];
     const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const owner = p.ownerId ? kanbanMemberById(p.ownerId) : null;
     tr.innerHTML = `
-      <td class="px-3 py-2.5 font-medium text-slate-700">${escapeHtml(p.contactName)}</td>
+      <td class="px-3 py-2.5 font-medium text-slate-700">
+        ${escapeHtml(p.contactName)}
+        ${owner ? `<div class="flex items-center gap-1 mt-0.5">${memberAvatarHtml(owner, 'w-4 h-4')}<span class="text-[10px] font-normal text-slate-400">${escapeHtml(owner.name)}</span></div>` : ''}
+      </td>
       <td class="px-3 py-2.5 text-slate-600">${escapeHtml(p.title) || '—'}</td>
       <td class="px-3 py-2.5 text-slate-500 whitespace-nowrap">${escapeHtml(p.phone) || '—'}</td>
       <td class="px-3 py-2.5">${tagInfo ? `<span class="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase ${tagInfo.badge}">${escapeHtml(tagInfo.label)}</span>` : '<span class="text-slate-300">—</span>'}</td>
@@ -3306,6 +3339,9 @@ function openProspectModal(mode, existing) {
   document.getElementById('prospectModalTitle').textContent = mode === 'edit' ? 'Editar prospecto' : 'Agregar prospecto';
   document.getElementById('prospectFormError').classList.add('hidden');
   document.getElementById('prospectForm').reset();
+  populateProspectOwnerSelect().then(() => {
+    document.getElementById('prospectOwner').value = (mode === 'edit' && existing && existing.ownerId) || '';
+  });
   if (mode === 'edit' && existing) {
     document.getElementById('prospectContactName').value = existing.contactName || '';
     document.getElementById('prospectTitle').value = existing.title || '';
@@ -3317,6 +3353,15 @@ function openProspectModal(mode, existing) {
     document.getElementById('prospectNotes').value = existing.notes || '';
   }
   prospectModal.classList.remove('hidden');
+}
+/* Mismo patrón que populateQuoteOwnerSelect. */
+function populateProspectOwnerSelect() {
+  const sel = document.getElementById('prospectOwner');
+  return idbGetAllMembers().then(members => {
+    KANBAN_MEMBERS = members;
+    sel.innerHTML = '<option value="">Sin asignar</option>' +
+      members.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  });
 }
 function closeProspectModal() { prospectModal.classList.add('hidden'); }
 document.getElementById('btnAddProspect').addEventListener('click', () => openProspectModal('add', null));
@@ -3331,6 +3376,8 @@ document.getElementById('prospectForm').addEventListener('submit', (e) => {
   errEl.classList.add('hidden');
   const nextActivityDateStr = document.getElementById('prospectNextActivityAt').value;
   const existing = prospectEditingId ? PIPELINE_PROSPECTS.find(p => p.id === prospectEditingId) : null;
+  const ownerId = document.getElementById('prospectOwner').value || null;
+  const owner = ownerId ? kanbanMemberById(ownerId) : null;
   const prospect = {
     id: prospectEditingId || ('prospect_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
     contactName,
@@ -3338,6 +3385,8 @@ document.getElementById('prospectForm').addEventListener('submit', (e) => {
     phone: document.getElementById('prospectPhone').value.trim(),
     email: document.getElementById('prospectEmail').value.trim(),
     tag: document.getElementById('prospectTag').value || null,
+    ownerId,
+    ownerName: owner ? owner.name : null,
     nextActivityAt: nextActivityDateStr ? new Date(nextActivityDateStr + 'T00:00:00').getTime() : null,
     nextActivityNote: document.getElementById('prospectNextActivityNote').value.trim(),
     notes: document.getElementById('prospectNotes').value.trim(),
@@ -3366,6 +3415,8 @@ function populateQuoteProspectSelect() {
 document.getElementById('btnCreateProspectFromQuote').addEventListener('click', () => {
   const contactName = document.getElementById('quoteClientName').value.trim();
   if (!contactName) { alert('Escribe primero el nombre del cliente, arriba en el formulario.'); return; }
+  const ownerId = document.getElementById('quoteOwnerSelect').value || null;
+  const owner = ownerId ? quoteOwnerCandidates.find(m => m.id === ownerId) : null;
   const prospect = {
     id: 'prospect_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
     contactName,
@@ -3373,6 +3424,8 @@ document.getElementById('btnCreateProspectFromQuote').addEventListener('click', 
     phone: document.getElementById('quoteClientPhone').value.trim(),
     email: document.getElementById('quoteClientEmail').value.trim(),
     tag: null,
+    ownerId,
+    ownerName: owner ? owner.name : null,
     nextActivityAt: null,
     nextActivityNote: '',
     notes: '',
@@ -3904,38 +3957,71 @@ function refreshKanbanData() {
   return Promise.all([idbGetAllTasks(), idbGetAllMembers()]).then(([tasks, members]) => {
     KANBAN_TASKS = tasks;
     KANBAN_MEMBERS = members;
-    renderKanbanMembersBar();
     renderKanbanBoard();
     populateKanbanTaskFormSelects();
   });
 }
 
-function renderKanbanMembersBar() {
-  const bar = document.getElementById('kanbanMembersBar');
-  bar.innerHTML = '';
-  if (!KANBAN_MEMBERS.length) {
-    const hint = document.createElement('span');
-    hint.className = 'text-[11px] text-slate-400 italic';
-    hint.textContent = 'Aún no hay personas en el equipo — agrega una para poder asignarle tareas.';
-    bar.appendChild(hint);
-    return;
-  }
-  KANBAN_MEMBERS.forEach(m => {
-    const chip = document.createElement('div');
-    chip.className = 'group flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-sky-200 transition-all';
-    chip.innerHTML = `
-      ${memberAvatarHtml(m, 'w-7 h-7')}
-      <span class="leading-tight">
-        <span class="block text-xs font-semibold text-slate-700">${escapeHtml(m.name)}</span>
-        ${m.role ? `<span class="block text-[9px] text-sky-600 font-medium">${escapeHtml(m.role)}</span>` : ''}
-      </span>
-      <button type="button" class="js-remove-member hidden group-hover:inline text-slate-300 hover:text-red-500 text-xs leading-none ml-0.5" title="Quitar del equipo">&times;</button>
-    `;
-    chip.querySelector('.js-remove-member').addEventListener('click', () => {
-      if (!confirm(`¿Quitar a ${m.name} del equipo? Sus tareas asignadas quedarán sin responsable.`)) return;
-      idbDeleteMember(m.id).then(refreshKanbanData);
+/* ---------------------------------------------------------
+   EQUIPO COMERCIAL — las mismas personas que se asignan en el Kanban
+   (kanban_members), gestionadas aquí en vez de dentro del Kanban, con
+   un resumen de lo que cada quien tiene asignado en el resto de la app.
+--------------------------------------------------------- */
+function renderEquipoPanel() {
+  return Promise.all([idbGetAllMembers(), idbGetAllTasks(), idbGetAllQuotes(), idbGetAllProspects()])
+    .then(([members, tasks, quotes, prospects]) => {
+      KANBAN_MEMBERS = members;
+      renderEquipoCards(members, tasks, quotes, prospects);
     });
-    bar.appendChild(chip);
+}
+function renderEquipoCards(members, tasks, quotes, prospects) {
+  const grid = document.getElementById('equipoGrid');
+  grid.innerHTML = '';
+  document.getElementById('equipoEmpty').classList.toggle('hidden', members.length > 0);
+  members.forEach(m => {
+    const activeTasks = tasks.filter(t => t.assigneeId === m.id && t.column !== 'hecho').length;
+    const memberQuotes = quotes.filter(q => q.ownerId === m.id).length;
+    const memberProspects = prospects.filter(p => p.ownerId === m.id).length;
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3';
+    card.innerHTML = `
+      <div class="flex items-start gap-3">
+        ${memberAvatarHtml(m, 'w-12 h-12')}
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(m.name)}</p>
+          ${m.role ? `<p class="text-[11px] text-sky-600 font-medium truncate">${escapeHtml(m.role)}</p>` : ''}
+          ${m.phone ? `<p class="text-[11px] text-slate-400 truncate">${escapeHtml(m.phone)}</p>` : ''}
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button class="js-equipo-edit p-1.5 rounded text-slate-400 hover:text-sky-600 hover:bg-sky-50" title="Editar">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="js-equipo-delete p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50" title="Quitar del equipo">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+        <div class="text-center">
+          <p class="text-sm font-bold text-violet-600">${activeTasks}</p>
+          <p class="text-[9px] text-slate-400 uppercase font-medium leading-tight">Tareas<br>activas</p>
+        </div>
+        <div class="text-center">
+          <p class="text-sm font-bold text-sky-600">${memberQuotes}</p>
+          <p class="text-[9px] text-slate-400 uppercase font-medium leading-tight">Cotiza-<br>ciones</p>
+        </div>
+        <div class="text-center">
+          <p class="text-sm font-bold text-amber-600">${memberProspects}</p>
+          <p class="text-[9px] text-slate-400 uppercase font-medium leading-tight">Pros-<br>pectos</p>
+        </div>
+      </div>
+    `;
+    card.querySelector('.js-equipo-edit').addEventListener('click', () => openEquipoMemberModal('edit', m));
+    card.querySelector('.js-equipo-delete').addEventListener('click', () => {
+      if (!confirm(`¿Quitar a ${m.name} del equipo? Sus tareas, cotizaciones y prospectos asignados quedarán sin responsable.`)) return;
+      idbDeleteMember(m.id).then(() => { renderEquipoPanel(); refreshKanbanData(); });
+    });
+    grid.appendChild(card);
   });
 }
 
@@ -4249,15 +4335,22 @@ function renderKanbanColorPicker() {
     wrap.appendChild(swatch);
   });
 }
-document.getElementById('btnAddKanbanMember').addEventListener('click', () => {
+let equipoEditingMemberId = null;
+function openEquipoMemberModal(mode, existing) {
+  equipoEditingMemberId = mode === 'edit' && existing ? existing.id : null;
+  document.getElementById('kanbanMemberModalTitle').textContent = mode === 'edit' ? 'Editar persona' : 'Agregar persona al equipo';
   document.getElementById('kanbanMemberForm').reset();
   document.getElementById('kanbanMemberFormError').classList.add('hidden');
-  kanbanSelectedColor = KANBAN_MEMBER_COLORS[KANBAN_MEMBERS.length % KANBAN_MEMBER_COLORS.length];
-  kanbanMemberPhotoDataUrl = null;
+  document.getElementById('kanbanMemberName').value = existing ? existing.name : '';
+  document.getElementById('kanbanMemberRole').value = existing ? (existing.role || '') : '';
+  document.getElementById('kanbanMemberPhone').value = existing ? (existing.phone || '') : '';
+  kanbanSelectedColor = (existing && existing.color) || KANBAN_MEMBER_COLORS[KANBAN_MEMBERS.length % KANBAN_MEMBER_COLORS.length];
+  kanbanMemberPhotoDataUrl = (existing && existing.photoDataUrl) || null;
   updateKanbanMemberPhotoPreview();
   renderKanbanColorPicker();
   kanbanMemberModal.classList.remove('hidden');
-});
+}
+document.getElementById('btnAddEquipoMember').addEventListener('click', () => openEquipoMemberModal('add', null));
 document.getElementById('kanbanMemberModalClose').addEventListener('click', () => kanbanMemberModal.classList.add('hidden'));
 document.getElementById('kanbanMemberModalCancel').addEventListener('click', () => kanbanMemberModal.classList.add('hidden'));
 kanbanMemberModal.addEventListener('click', (e) => { if (e.target === kanbanMemberModal) kanbanMemberModal.classList.add('hidden'); });
@@ -4270,9 +4363,10 @@ document.getElementById('kanbanMemberForm').addEventListener('submit', (e) => {
   const errEl = document.getElementById('kanbanMemberFormError');
   if (!name) { errEl.textContent = 'Escribe un nombre.'; errEl.classList.remove('hidden'); return; }
   errEl.classList.add('hidden');
-  const member = { id: 'member_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, role, color: kanbanSelectedColor, phone, photoDataUrl: kanbanMemberPhotoDataUrl };
+  const member = { id: equipoEditingMemberId || ('member_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)), name, role, color: kanbanSelectedColor, phone, photoDataUrl: kanbanMemberPhotoDataUrl };
   idbPutMember(member).then(() => {
     kanbanMemberModal.classList.add('hidden');
+    renderEquipoPanel();
     refreshKanbanData();
   });
 });
