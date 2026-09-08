@@ -1200,84 +1200,28 @@ QUOTE_CATEGORIES.forEach(qc => { QUOTE_CATEGORY_BY_ID[qc.id] = qc; });
    (el usuario puede cambiarlo por objeto al agregarlo/editarlo).
 --------------------------------------------------------- */
 const CATALOG = [
-  { id: 'motobombas', label: 'Motobombas', color: '#2563eb', code: 'MB', quoteCategory: 'sist-filtracion', icon: 'assets/motobombas-icon.png', items: [
-      { id: 'bomba-centrifuga', name: 'Bomba centrífuga', shape: 'pump' },
-  ]},
-  { id: 'filtracion', label: 'Filtración', color: '#0891b2', code: 'FIL', quoteCategory: 'sist-filtracion', icon: 'assets/filtracion-icon.png', items: [
-      { id: 'valvula-selectora', name: 'Válvula selectora', shape: 'valve' },
-  ]},
-  { id: 'iluminacion', label: 'Iluminación', color: '#d97706', code: 'ILU', quoteCategory: 'iluminacion-q', icon: 'assets/iluminacion-icon.png', items: [
-      { id: 'led-sumergible', name: 'Luz LED sumergible', shape: 'light' },
-      { id: 'reflector-spa', name: 'Reflector de spa', shape: 'light' },
-  ]},
-  { id: 'complementos-iluminacion', label: 'Complementos Iluminación', color: '#f59e0b', code: 'CIL', quoteCategory: 'complementos-iluminacion-q', icon: 'assets/complementos-iluminacion-icon.png', items: [
-      { id: 'fibra-optica', name: 'Fibra óptica', shape: 'fiber' },
-  ]},
-  { id: 'sistemas-desinfeccion', label: 'Sistemas de desinfección', color: '#0d9488', code: 'SDI', quoteCategory: 'desinfeccion-cloro', icon: 'assets/sistemas-desinfeccion-icon.png', items: [
-      { id: 'clorador-salino', name: 'Clorador salino', shape: 'chlorinator' },
-      { id: 'dosificador', name: 'Dosificador automático', shape: 'doser' },
-  ]},
-  { id: 'calefaccion-gas', label: 'Calefacción a gas', color: '#dc2626', code: 'CGA', quoteCategory: 'calefaccion-gas-q', icon: 'assets/calefaccion-gas-icon.png', items: [
-      { id: 'calentador-gas', name: 'Calentador a gas', shape: 'heater' },
-  ]},
-  { id: 'calefaccion-energia', label: 'Calefacción Energía', color: '#ea580c', code: 'CEN', quoteCategory: 'calefaccion-gas-q', icon: 'assets/calefaccion-energia-icon.png', items: [
-      { id: 'bomba-calor', name: 'Bomba de calor', shape: 'heatpump' },
-      { id: 'calentador-electrico', name: 'Calentador eléctrico', shape: 'heater' },
-      { id: 'calentador-solar', name: 'Calentador solar', shape: 'solar' },
-      { id: 'intercambiador', name: 'Intercambiador de calor', shape: 'heater' },
-  ]},
-  { id: 'automatizacion', label: 'Automatización', color: '#7c3aed', code: 'AUT', quoteCategory: 'automatizacion-q', icon: 'assets/automatizacion-icon.png', items: [
-      { id: 'variador', name: 'Variador de velocidad', shape: 'panel' },
-      { id: 'tablero-control', name: 'Tablero de control', shape: 'panel' },
-      { id: 'wifi-automatizacion', name: 'Automatización WiFi', shape: 'wifi' },
-  ]},
-  { id: 'complementos-automatizacion', label: 'Complementos automatización', color: '#a78bfa', code: 'CAU', quoteCategory: 'sistemas-control', icon: 'assets/complementos-automatizacion-icon.png', items: [
-      { id: 'sensor-temp', name: 'Sensor de temperatura', shape: 'sensor' },
-  ]},
-  { id: 'wellness', label: 'Wellness', color: '#ec4899', code: 'WEL', quoteCategory: 'hidroterapia', icon: 'assets/wellness-icon.png', items: [
-      { id: 'escalon-spa', name: 'Escalón de spa', shape: 'step' },
-  ]},
-  { id: 'accesorios-electricos-hidraulicos', label: 'Accesorios Eléctricos e Hidráulicos', color: '#64748b', code: 'AEH', quoteCategory: 'sistemas-conduccion-agua', icon: 'assets/accesorios-electricos-hidraulicos-icon.png', items: [
-      { id: 'valvula-bola', name: 'Válvula de bola', shape: 'valve' },
-      { id: 'caja-conexion', name: 'Caja de conexión eléctrica', shape: 'panel' },
-  ]},
-  { id: 'saber-hacer', label: 'Saber hacer', color: '#eab308', code: 'SAB', quoteCategory: 'asesoria-planimetria', icon: 'assets/saber-hacer-icon.png', items: [
-      { id: 'asesoria-tecnica', name: 'Asesoría técnica', shape: 'idea' },
-  ]},
-  { id: 'mano-obra', label: 'Mano de obra', color: '#78716c', code: 'MDO', quoteCategory: 'mano-obra-instalacion', icon: 'assets/mano-obra-icon.png', items: [
-      { id: 'instalacion-mano-obra', name: 'Instalación y mano de obra', shape: 'wrench' },
-  ]},
-  { id: 'robots-aseo', label: 'Robots de Aseo', color: '#059669', code: 'RAS', quoteCategory: 'sistemas-aspiracion', icon: 'assets/robots-aseo-icon.png', items: [
-      { id: 'robot-limpiafondos', name: 'Robot limpiafondos', shape: 'robot' },
-  ]},
-  { id: 'elementos-aseo-quimicos', label: 'Elementos de Aseo y Químicos', color: '#10b981', code: 'EAQ', quoteCategory: 'kit-limpieza', icon: 'assets/elementos-aseo-quimicos-icon.png', items: [
-      { id: 'aspiradora-manual', name: 'Aspiradora manual', shape: 'vacuum' },
-      { id: 'kit-prueba', name: 'Kit de prueba', shape: 'testkit' },
-  ]},
-  { id: 'material-vaso-piscina', label: 'Material Vaso Piscina', color: '#475569', code: 'MVP', quoteCategory: 'otros-q', icon: 'assets/material-vaso-piscina-icon.png', items: [
-      { id: 'escalera', name: 'Escalera de piscina', shape: 'ladder' },
-      { id: 'cubierta-termica', name: 'Cubierta térmica', shape: 'cover' },
-      { id: 'skimmer', name: 'Skimmer', shape: 'skimmer' },
-  ]},
-  { id: 'hidrojets', label: 'Hidrojets', color: '#9333ea', code: 'HJ', quoteCategory: 'hidroterapia', icon: 'assets/hidrojets-icon.png', items: [
-      { id: 'jet-direccional', name: 'Jet direccional', shape: 'jet' },
-      { id: 'jet-turbo', name: 'Jet turbo de spa', shape: 'jet' },
-  ]},
-  { id: 'seguridad-piscina', label: 'Seguridad Piscina', color: '#e11d48', code: 'SEG', quoteCategory: 'seguridad-piscina-q', icon: 'assets/seguridad-piscina-icon.png', items: [
-      { id: 'alarma-piscina', name: 'Alarma de piscina', shape: 'bell' },
-  ]},
-  { id: 'sopladores', label: 'Sopladores', color: '#0ea5e9', code: 'SOP', quoteCategory: 'hidroterapia', icon: 'assets/sopladores-icon.png', items: [
-      { id: 'soplador-aire', name: 'Soplador de aire', shape: 'blower' },
-  ]},
-  { id: 'nado-contracorriente', label: 'Nado Contracorriente', color: '#6366f1', code: 'NC', quoteCategory: 'hidroterapia', icon: 'assets/nado-contracorriente-icon.png', items: [
-      { id: 'nado-contracorriente-item', name: 'Sistema de nado contracorriente', shape: 'jet' },
-  ]},
-  { id: 'maderas-saunas', label: 'Maderas Saunas', color: '#92400e', code: 'MSA', quoteCategory: 'otros-q', icon: 'assets/maderas-saunas-icon.png', items: [
-      { id: 'sauna-madera', name: 'Sauna de madera', shape: 'cabin' },
-  ]},
-  { id: 'otros', label: 'Otros', color: '#6b7280', code: 'OTR', quoteCategory: 'otros-q', icon: 'assets/otros-icon.png', items: [
-      { id: 'sombrilla', name: 'Sombrilla', shape: 'umbrella' },
-  ]},
+  { id: 'motobombas', label: 'Motobombas', color: '#2563eb', code: 'MB', quoteCategory: 'sist-filtracion', icon: 'assets/motobombas-icon.png', items: [] },
+  { id: 'filtracion', label: 'Filtración', color: '#0891b2', code: 'FIL', quoteCategory: 'sist-filtracion', icon: 'assets/filtracion-icon.png', items: [] },
+  { id: 'iluminacion', label: 'Iluminación', color: '#d97706', code: 'ILU', quoteCategory: 'iluminacion-q', icon: 'assets/iluminacion-icon.png', items: [] },
+  { id: 'complementos-iluminacion', label: 'Complementos Iluminación', color: '#f59e0b', code: 'CIL', quoteCategory: 'complementos-iluminacion-q', icon: 'assets/complementos-iluminacion-icon.png', items: [] },
+  { id: 'sistemas-desinfeccion', label: 'Sistemas de desinfección', color: '#0d9488', code: 'SDI', quoteCategory: 'desinfeccion-cloro', icon: 'assets/sistemas-desinfeccion-icon.png', items: [] },
+  { id: 'calefaccion-gas', label: 'Calefacción a gas', color: '#dc2626', code: 'CGA', quoteCategory: 'calefaccion-gas-q', icon: 'assets/calefaccion-gas-icon.png', items: [] },
+  { id: 'calefaccion-energia', label: 'Calefacción Energía', color: '#ea580c', code: 'CEN', quoteCategory: 'calefaccion-gas-q', icon: 'assets/calefaccion-energia-icon.png', items: [] },
+  { id: 'automatizacion', label: 'Automatización', color: '#7c3aed', code: 'AUT', quoteCategory: 'automatizacion-q', icon: 'assets/automatizacion-icon.png', items: [] },
+  { id: 'complementos-automatizacion', label: 'Complementos automatización', color: '#a78bfa', code: 'CAU', quoteCategory: 'sistemas-control', icon: 'assets/complementos-automatizacion-icon.png', items: [] },
+  { id: 'wellness', label: 'Wellness', color: '#ec4899', code: 'WEL', quoteCategory: 'hidroterapia', icon: 'assets/wellness-icon.png', items: [] },
+  { id: 'accesorios-electricos-hidraulicos', label: 'Accesorios Eléctricos e Hidráulicos', color: '#64748b', code: 'AEH', quoteCategory: 'sistemas-conduccion-agua', icon: 'assets/accesorios-electricos-hidraulicos-icon.png', items: [] },
+  { id: 'saber-hacer', label: 'Saber hacer', color: '#eab308', code: 'SAB', quoteCategory: 'asesoria-planimetria', icon: 'assets/saber-hacer-icon.png', items: [] },
+  { id: 'mano-obra', label: 'Mano de obra', color: '#78716c', code: 'MDO', quoteCategory: 'mano-obra-instalacion', icon: 'assets/mano-obra-icon.png', items: [] },
+  { id: 'robots-aseo', label: 'Robots de Aseo', color: '#059669', code: 'RAS', quoteCategory: 'sistemas-aspiracion', icon: 'assets/robots-aseo-icon.png', items: [] },
+  { id: 'elementos-aseo-quimicos', label: 'Elementos de Aseo y Químicos', color: '#10b981', code: 'EAQ', quoteCategory: 'kit-limpieza', icon: 'assets/elementos-aseo-quimicos-icon.png', items: [] },
+  { id: 'material-vaso-piscina', label: 'Material Vaso Piscina', color: '#475569', code: 'MVP', quoteCategory: 'otros-q', icon: 'assets/material-vaso-piscina-icon.png', items: [] },
+  { id: 'hidrojets', label: 'Hidrojets', color: '#9333ea', code: 'HJ', quoteCategory: 'hidroterapia', icon: 'assets/hidrojets-icon.png', items: [] },
+  { id: 'seguridad-piscina', label: 'Seguridad Piscina', color: '#e11d48', code: 'SEG', quoteCategory: 'seguridad-piscina-q', icon: 'assets/seguridad-piscina-icon.png', items: [] },
+  { id: 'sopladores', label: 'Sopladores', color: '#0ea5e9', code: 'SOP', quoteCategory: 'hidroterapia', icon: 'assets/sopladores-icon.png', items: [] },
+  { id: 'nado-contracorriente', label: 'Nado Contracorriente', color: '#6366f1', code: 'NC', quoteCategory: 'hidroterapia', icon: 'assets/nado-contracorriente-icon.png', items: [] },
+  { id: 'maderas-saunas', label: 'Maderas Saunas', color: '#92400e', code: 'MSA', quoteCategory: 'otros-q', icon: 'assets/maderas-saunas-icon.png', items: [] },
+  { id: 'otros', label: 'Otros', color: '#6b7280', code: 'OTR', quoteCategory: 'otros-q', icon: 'assets/otros-icon.png', items: [] },
 ];
 const ITEM_BY_ID = {};
 CATALOG.forEach(cat => cat.items.forEach(it => { ITEM_BY_ID[it.id] = { ...it, categoryColor: cat.color }; }));
