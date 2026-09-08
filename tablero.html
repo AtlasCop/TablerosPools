@@ -3487,13 +3487,26 @@ document.getElementById('btnCreateProspectFromQuote').addEventListener('click', 
    sesión. La conexión con Google usa Google Identity Services (OAuth
    2.0 solo del lado del navegador, sin backend) — el token que entrega
    dura ~1 hora y vive solo en esta pestaña, nunca en la base de datos;
-   cada quien conecta su propia cuenta de Google.
+   cada quien conecta su propia cuenta de Google. Como ese token se vence
+   tan seguido, se renueva solo en segundo plano (sin pedirle nada a
+   quien esté usando la página) un rato antes de que caduque, y también
+   justo antes de cada uso si por lo que sea la renovación en segundo
+   plano no alcanzó a correr (por ejemplo, si la pestaña estuvo en
+   segundo plano y el navegador le bajó la prioridad a sus temporizadores).
 --------------------------------------------------------- */
 const GOOGLE_CALENDAR_CLIENT_ID = '796504028282-g79e1o0mlcdkao2gn0m0h9esgca3kaba.apps.googleusercontent.com';
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const GOOGLE_TOKEN_KEY = 'google_calendar_token';
+const GOOGLE_TOKEN_EXPIRY_KEY = 'google_calendar_token_expiry';
 let googleAccessToken = null;
 let googleTokenClient = null;
-try { googleAccessToken = sessionStorage.getItem('google_calendar_token') || null; } catch {}
+let googleTokenExpiryAt = 0;
+let googleTokenRefreshTimer = null;
+let googlePendingRefreshResolvers = [];
+try {
+  googleAccessToken = sessionStorage.getItem(GOOGLE_TOKEN_KEY) || null;
+  googleTokenExpiryAt = Number(sessionStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY)) || 0;
+} catch {}
 
 function dateKey(d) {
   // YYYY-MM-DD en hora LOCAL — evitar toISOString(), que pasa a UTC y
@@ -3714,21 +3727,83 @@ function updateGoogleCalendarUI() {
     statusEl.classList.add('hidden');
   }
 }
+function saveGoogleToken(accessToken, expiresInSeconds) {
+  googleAccessToken = accessToken;
+  googleTokenExpiryAt = Date.now() + (Number(expiresInSeconds) || 3600) * 1000;
+  try {
+    sessionStorage.setItem(GOOGLE_TOKEN_KEY, accessToken);
+    sessionStorage.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(googleTokenExpiryAt));
+  } catch {}
+}
+function clearGoogleToken() {
+  googleAccessToken = null;
+  googleTokenExpiryAt = 0;
+  try { sessionStorage.removeItem(GOOGLE_TOKEN_KEY); sessionStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY); } catch {}
+  if (googleTokenRefreshTimer) { clearTimeout(googleTokenRefreshTimer); googleTokenRefreshTimer = null; }
+}
+/* El token dura ~1 hora; se programa renovarlo solo (sin pedir nada a
+   quien esté usando la página) 5 minutos antes de que se venza. Si el
+   navegador le bajó prioridad al temporizador por tener la pestaña en
+   segundo plano y ya se pasó la hora, se renueva ya mismo. */
+function scheduleGoogleTokenRefresh() {
+  if (googleTokenRefreshTimer) { clearTimeout(googleTokenRefreshTimer); googleTokenRefreshTimer = null; }
+  if (!googleAccessToken || !googleTokenExpiryAt || !googleTokenClient) return;
+  const msUntilRefresh = Math.max(0, googleTokenExpiryAt - Date.now() - 5 * 60 * 1000);
+  googleTokenRefreshTimer = setTimeout(() => {
+    googleTokenClient.requestAccessToken({ prompt: '' });
+  }, msUntilRefresh);
+}
+/* Antes de usar el token (traer o crear un evento), confirma que todavía
+   le quede margen — si no, lo renueva primero y solo entonces sigue.
+   Esto es lo que de verdad evita el "se desconectó" que se sentía antes:
+   ya no depende únicamente de que el temporizador de fondo haya alcanzado
+   a correr mientras la pestaña estaba en segundo plano. */
+function ensureGoogleTokenFresh() {
+  if (!googleAccessToken) return Promise.resolve();
+  if (Date.now() < googleTokenExpiryAt - 60000) return Promise.resolve();
+  if (!googleTokenClient) return Promise.resolve();
+  return new Promise((resolve) => {
+    googlePendingRefreshResolvers.push(resolve);
+    googleTokenClient.requestAccessToken({ prompt: '' });
+  });
+}
 function initGoogleCalendarClient() {
-  if (!GOOGLE_CALENDAR_CLIENT_ID || !window.google || !window.google.accounts) return;
+  if (googleTokenClient || !GOOGLE_CALENDAR_CLIENT_ID || !window.google || !window.google.accounts) return;
   googleTokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CALENDAR_CLIENT_ID,
     scope: GOOGLE_CALENDAR_SCOPE,
     callback: (resp) => {
       if (resp && resp.access_token) {
-        googleAccessToken = resp.access_token;
-        try { sessionStorage.setItem('google_calendar_token', resp.access_token); } catch {}
+        saveGoogleToken(resp.access_token, resp.expires_in);
         updateGoogleCalendarUI();
+        scheduleGoogleTokenRefresh();
         renderCalendarPanel();
+      } else {
+        // La renovación silenciosa falló (por ejemplo, se revocó el acceso
+        // desde la cuenta de Google) — se limpia en vez de seguir mostrando
+        // "conectado" cuando ya no es cierto.
+        clearGoogleToken();
+        updateGoogleCalendarUI();
       }
+      const resolvers = googlePendingRefreshResolvers;
+      googlePendingRefreshResolvers = [];
+      resolvers.forEach(r => r());
     },
   });
+  // Si ya había un token de una carga anterior de esta misma pestaña,
+  // programa su renovación en vez de esperar a que alguien haga algo.
+  if (googleAccessToken) scheduleGoogleTokenRefresh();
 }
+/* El script de Google (accounts.google.com/gsi/client) carga async — puede
+   no estar listo todavía cuando se intenta inicializar el cliente al abrir
+   la página. Se reintenta unas cuantas veces en vez de una sola, para no
+   depender de ganarle la carrera al script. */
+(function waitForGoogleIdentityAndInit(attemptsLeft) {
+  if (googleTokenClient || !GOOGLE_CALENDAR_CLIENT_ID) return;
+  if (window.google && window.google.accounts) { initGoogleCalendarClient(); return; }
+  if (attemptsLeft <= 0) return;
+  setTimeout(() => waitForGoogleIdentityAndInit(attemptsLeft - 1), 300);
+})(30);
 document.getElementById('btnGoogleCalendarConnect').addEventListener('click', () => {
   if (!GOOGLE_CALENDAR_CLIENT_ID) {
     alert('La conexión con Google Calendar todavía no está configurada en esta instalación — faltan las credenciales de Google Cloud.');
@@ -3739,27 +3814,34 @@ document.getElementById('btnGoogleCalendarConnect').addEventListener('click', ()
 });
 function fetchGoogleCalendarEvents() {
   if (!googleAccessToken) return Promise.resolve([]);
-  const timeMin = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1).toISOString();
-  const timeMax = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 2, 0).toISOString();
-  return fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`, {
-    headers: { Authorization: 'Bearer ' + googleAccessToken },
-  }).then(res => {
-    if (!res.ok) {
-      if (res.status === 401) { googleAccessToken = null; try { sessionStorage.removeItem('google_calendar_token'); } catch {} updateGoogleCalendarUI(); }
-      return { items: [] };
-    }
-    return res.json();
-  }).then(data => (data.items || []).map(ev => ({
-    id: 'google_' + ev.id,
-    googleEventId: ev.id,
-    title: ev.summary || '(sin título)',
-    startAt: ev.start.dateTime ? new Date(ev.start.dateTime).getTime() : new Date(ev.start.date + 'T00:00:00').getTime(),
-    allDay: !ev.start.dateTime,
-    location: ev.location || '',
-  }))).catch(() => []);
+  return ensureGoogleTokenFresh().then(() => {
+    if (!googleAccessToken) return [];
+    const timeMin = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1).toISOString();
+    const timeMax = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 2, 0).toISOString();
+    return fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`, {
+      headers: { Authorization: 'Bearer ' + googleAccessToken },
+    }).then(res => {
+      if (!res.ok) {
+        if (res.status === 401) { clearGoogleToken(); updateGoogleCalendarUI(); }
+        return { items: [] };
+      }
+      return res.json();
+    }).then(data => (data.items || []).map(ev => ({
+      id: 'google_' + ev.id,
+      googleEventId: ev.id,
+      title: ev.summary || '(sin título)',
+      startAt: ev.start.dateTime ? new Date(ev.start.dateTime).getTime() : new Date(ev.start.date + 'T00:00:00').getTime(),
+      allDay: !ev.start.dateTime,
+      location: ev.location || '',
+    }))).catch(() => []);
+  });
 }
 function pushEventToGoogleIfConnected(event) {
   if (!googleAccessToken || event.googleEventId) return Promise.resolve();
+  return ensureGoogleTokenFresh().then(() => pushEventToGoogleNow(event));
+}
+function pushEventToGoogleNow(event) {
+  if (!googleAccessToken) return Promise.resolve();
   const body = event.allDay
     ? { summary: event.title, description: event.description, location: event.location, start: { date: dateKey(new Date(event.startAt)) }, end: { date: dateKey(new Date(event.startAt)) } }
     : { summary: event.title, description: event.description, location: event.location,
@@ -3774,7 +3856,6 @@ function pushEventToGoogleIfConnected(event) {
   });
 }
 updateGoogleCalendarUI();
-if (GOOGLE_CALENDAR_CLIENT_ID) initGoogleCalendarClient();
 
 /* ---------------------------------------------------------
    EDITAR UNA COTIZACIÓN YA GUARDADA — a diferencia de "Generar
