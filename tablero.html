@@ -102,6 +102,29 @@
   body:not(.role-admin) #btnResetCodes {
     display: none !important;
   }
+
+  /* En pantallas angostas (celular), la barra de arriba tiene más botones
+     de los que caben en una sola fila y no había forma de deslizarla —
+     los últimos quedaban recortados fuera de la pantalla, inalcanzables.
+     Se deja desplazar horizontalmente y cada botón mantiene su tamaño en
+     vez de encogerse hasta verse mal. */
+  #mainToolbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  #mainToolbar > * {
+    flex-shrink: 0;
+  }
+  /* Los nombres de las pestañas no deben partirse a la mitad de la
+     palabra ("Panel" / "Cotizaciones" en dos líneas) — la barra de
+     pestañas ya se puede deslizar de lado, así que cada una se queda en
+     una sola línea y se desliza como una tira de chips. */
+  #tabBar > a {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -117,7 +140,7 @@
 <div class="h-screen w-screen flex flex-col">
 
   <!-- TOP TOOLBAR -->
-  <header class="h-14 shrink-0 bg-slate-900 text-white flex items-center gap-3 px-4 z-30">
+  <header id="mainToolbar" class="h-14 shrink-0 bg-slate-900 text-white flex items-center gap-3 px-4 z-30">
     <div class="flex items-center gap-2 font-semibold tracking-tight">
       <img src="assets/logo.png" alt="Aqua Bruma" class="w-8 h-8" />
     </div>
@@ -237,7 +260,7 @@
   </header>
 
   <!-- VIEW TABS -->
-  <div class="h-10 shrink-0 bg-white border-b border-slate-200 flex items-center gap-1 px-4 overflow-x-auto">
+  <div id="tabBar" class="h-10 shrink-0 bg-white border-b border-slate-200 flex items-center gap-1 px-4 overflow-x-auto">
     <a id="tabBtnProductos" href="#productos" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-sky-500 text-sky-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Productos</a>
     <a id="tabBtnInventario" href="#inventario" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Inventario</a>
     <a id="tabBtnCotizaciones" href="#cotizaciones" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Panel Cotizaciones</a>
@@ -486,7 +509,7 @@
         </div>
       </div>
       <p id="googleCalendarStatus" class="hidden text-[10px] mt-2"></p>
-      <div class="flex items-center gap-2 mt-3">
+      <div class="flex items-center gap-2 mt-3 flex-wrap">
         <button id="btnCalendarPrevMonth" class="p-1.5 rounded hover:bg-slate-100 text-slate-500">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -495,12 +518,12 @@
         </button>
         <h3 id="calendarMonthLabel" class="text-sm font-bold text-slate-700"></h3>
         <button id="btnCalendarToday" class="ml-2 text-xs px-2.5 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">Hoy</button>
-        <div class="flex-1"></div>
-        <div class="flex items-center gap-3 text-[10px] text-slate-500">
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-500"></span>Evento</span>
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-violet-500"></span>Tarea Kanban</span>
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Prospecto</span>
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Google</span>
+        <div class="flex-1 hidden sm:block"></div>
+        <div class="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
+          <span class="flex items-center gap-1 whitespace-nowrap"><span class="w-2 h-2 rounded-full bg-sky-500 shrink-0"></span>Evento</span>
+          <span class="flex items-center gap-1 whitespace-nowrap"><span class="w-2 h-2 rounded-full bg-violet-500 shrink-0"></span>Tarea Kanban</span>
+          <span class="flex items-center gap-1 whitespace-nowrap"><span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>Prospecto</span>
+          <span class="flex items-center gap-1 whitespace-nowrap"><span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>Google</span>
         </div>
       </div>
     </div>
@@ -2401,6 +2424,14 @@ document.getElementById('leftPanelToggle').addEventListener('click', () => {
 });
 applyStoredWidth(invPanelEl, 'invPanel', 180, 520);
 bindResizeHandle(document.getElementById('invPanelResizeHandle'), invPanelEl, { min: 180, max: 520, sign: 1, storageKey: 'invPanel' });
+// En pantallas angostas (celular) este panel ocupa casi todo el ancho y no
+// deja ver el tablero — arranca colapsado ahí, igual que el de cotización
+// más abajo; se abre con la flechita junto al panel cuando haga falta.
+if (window.innerWidth < 640) {
+  leftPanelCollapsed = true;
+  setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, leftPanelCollapsed);
+  requestAnimationFrame(resizeCanvas);
+}
 
 let quotePanelCollapsed = false;
 const quotePanel = document.getElementById('quotePanel');
@@ -3045,8 +3076,8 @@ function renderQuotesPanel() {
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         ${isPending ? `
-        <div class="w-full flex items-center justify-between gap-2 pt-2 mt-1 border-t border-slate-100 text-[11px]">
-          <div class="flex items-center gap-1.5 text-slate-500">
+        <div class="w-full flex items-center justify-between gap-2 pt-2 mt-1 border-t border-slate-100 text-[11px] flex-wrap">
+          <div class="flex items-center gap-1.5 text-slate-500 flex-wrap">
             <span class="w-2 h-2 rounded-full shrink-0 ${age.dotClass}"></span>
             <span>${age.label}</span>
             <span class="text-slate-300">·</span>
