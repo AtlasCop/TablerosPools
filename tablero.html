@@ -1381,8 +1381,28 @@ function idbGetAllItems() {
 function idbGetAllItemsMeta() {
   return sb.from('items').select('id,categoryId,code,name,subline,description,priceNoTax,quoteCategory,datasheetUrl,createdAt').then(sbResult);
 }
-function idbGetAllItemImages() {
-  return sb.from('items').select('id,imageDataUrl,image3DDataUrl').then(sbResult);
+/* Trae las fotos en lotes pequeños (en vez de una sola consulta con TODAS)
+   — con el catálogo creciendo, pedirlas de una vez llegó a superar el
+   límite de tiempo que Supabase le pone a cada consulta (statement
+   timeout), y la consulta completa fallaba con error 500 sin traer
+   ninguna foto. En lotes, cada consulta es chica y rápida sin importar
+   cuántos objetos con foto haya en total; `onBatch` se llama con cada
+   lote apenas llega, para que las fotos se vayan mostrando de a poco
+   en vez de esperar a tener el catálogo entero. */
+function idbFetchItemImagesInBatches(onBatch) {
+  const PAGE_SIZE = 15;
+  function fetchPage(offset) {
+    return sb.from('items')
+      .select('id,imageDataUrl,image3DDataUrl')
+      .order('id', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1)
+      .then(sbResult)
+      .then(rows => {
+        if (rows.length) onBatch(rows);
+        if (rows.length === PAGE_SIZE) return fetchPage(offset + PAGE_SIZE);
+      });
+  }
+  return fetchPage(0);
 }
 function idbPutQuote(quote) {
   return sb.from('quotes').upsert(quote).then(sbResult).then(() => quote);
@@ -1472,16 +1492,17 @@ idbGetAllItemsMeta().then(items => {
   // con el inventario completo apenas está disponible (todavía sin fotos).
   renderInventory();
   renderInventoryTable();
-  return idbGetAllItemImages();
-}).then(images => {
-  images.forEach(img => {
-    const it = CUSTOM_ITEMS_BY_ID[img.id];
-    if (it) { it.imageDataUrl = img.imageDataUrl; it.image3DDataUrl = img.image3DDataUrl; }
-  });
-  // Las fotos ya llegaron — se vuelve a pintar todo para que aparezcan.
-  rebuildQuote();
-  renderInventory();
-  renderInventoryTable();
+  idbFetchItemImagesInBatches(rows => {
+    rows.forEach(img => {
+      const it = CUSTOM_ITEMS_BY_ID[img.id];
+      if (it) { it.imageDataUrl = img.imageDataUrl; it.image3DDataUrl = img.image3DDataUrl; }
+    });
+    // Cada lote de fotos que llega se pinta de una vez, en vez de esperar
+    // a que termine todo el catálogo.
+    rebuildQuote();
+    renderInventory();
+    renderInventoryTable();
+  }).catch(err => console.warn('No se pudieron cargar todas las fotos del inventario:', err && err.message));
 });
 
 /* ---------------------------------------------------------
