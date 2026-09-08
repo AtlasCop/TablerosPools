@@ -989,7 +989,7 @@
       </div>
       <p id="calendarEventFormError" class="hidden text-xs text-red-500"></p>
       <div class="flex gap-2 pt-1">
-        <button type="button" id="calendarEventDeleteBtn" class="hidden text-xs px-3 py-2 rounded border border-red-200 text-red-500 hover:bg-red-50">Eliminar</button>
+        <button type="button" id="calendarEventDeleteBtn" class="hidden text-xs px-3 py-2 rounded border border-red-200 text-red-500 hover:bg-red-50">Cancelar evento</button>
         <button type="button" id="calendarEventModalCancel" class="flex-1 text-xs px-3 py-2 rounded border border-slate-200 hover:bg-slate-50">Cancelar</button>
         <button type="submit" class="flex-1 text-xs px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-white font-medium">Guardar</button>
       </div>
@@ -3529,7 +3529,12 @@ document.getElementById('calendarWeekdaysRow').innerHTML = ['Dom', 'Lun', 'Mar',
 
 function buildCalendarItems(events, tasks, prospects, googleEvents) {
   const items = [];
-  events.forEach(e => items.push({ kind: e.googleEventId ? 'google' : 'event', id: e.id, title: e.title, startAt: e.startAt, allDay: !!e.allDay, color: e.googleEventId ? 'emerald' : 'sky', raw: e }));
+  // "editable: true" solo para filas que de verdad viven en nuestra tabla
+  // calendar_events (tienen id propio, se pueden editar/cancelar aquí) —
+  // los eventos de Google que aparecen abajo son de solo lectura, se
+  // crearon directamente en Google y esta app no tiene un registro propio
+  // de ellos para editar.
+  events.forEach(e => items.push({ kind: e.googleEventId ? 'google' : 'event', id: e.id, title: e.title, startAt: e.startAt, allDay: !!e.allDay, color: e.googleEventId ? 'emerald' : 'sky', raw: e, editable: true }));
   tasks.forEach(t => {
     if (!t.dueDate) return;
     items.push({ kind: 'kanban', id: 'k_' + t.id, title: t.title, startAt: new Date(t.dueDate + 'T12:00:00').getTime(), allDay: true, color: 'violet', raw: t });
@@ -3547,7 +3552,7 @@ function buildCalendarItems(events, tasks, prospects, googleEvents) {
   const alreadyLinkedGoogleIds = new Set(events.filter(e => e.googleEventId).map(e => e.googleEventId));
   (googleEvents || [])
     .filter(ge => !alreadyLinkedGoogleIds.has(ge.googleEventId))
-    .forEach(ge => items.push({ kind: 'google', id: ge.id, title: ge.title, startAt: ge.startAt, allDay: ge.allDay, location: ge.location, color: 'emerald', raw: ge }));
+    .forEach(ge => items.push({ kind: 'google', id: ge.id, title: ge.title, startAt: ge.startAt, allDay: ge.allDay, location: ge.location, color: 'emerald', raw: ge, editable: false }));
   return items;
 }
 function groupCalendarItemsByDay(items) {
@@ -3620,19 +3625,43 @@ function openCalendarDayModal(date, items) {
   list.innerHTML = items.length ? '' : '<p class="text-xs text-slate-400 text-center py-4">Sin nada programado este día.</p>';
   items.forEach(it => {
     const row = document.createElement('div');
-    const clickable = it.kind === 'event';
-    row.className = 'rounded-lg border border-slate-200 p-2.5' + (clickable ? ' cursor-pointer hover:border-sky-300' : '');
+    const editable = it.editable === true;
+    row.className = 'rounded-lg border border-slate-200 p-2.5';
     const timeLabel = it.allDay ? 'Todo el día' : new Date(it.startAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
     const location = it.raw && it.raw.location;
+    const description = editable ? (it.raw && it.raw.description) : '';
     row.innerHTML = `
-      <div class="flex items-center gap-1.5 mb-0.5">
-        <span class="w-2 h-2 rounded-full shrink-0 ${CALENDAR_COLOR_DOT[it.color]}"></span>
-        <span class="text-[10px] font-semibold uppercase text-slate-400">${CALENDAR_KIND_LABEL[it.kind]}</span>
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 mb-0.5">
+            <span class="w-2 h-2 rounded-full shrink-0 ${CALENDAR_COLOR_DOT[it.color]}"></span>
+            <span class="text-[10px] font-semibold uppercase text-slate-400">${CALENDAR_KIND_LABEL[it.kind]}</span>
+          </div>
+          <div class="text-xs font-medium text-slate-700">${escapeHtml(it.title)}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">${timeLabel}${location ? ' · ' + escapeHtml(location) : ''}</div>
+          ${description ? `<div class="text-[10px] text-slate-500 mt-1 whitespace-pre-line">${escapeHtml(description)}</div>` : ''}
+        </div>
+        ${editable ? `
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" class="js-day-event-edit p-1.5 rounded text-slate-400 hover:text-sky-600 hover:bg-sky-50" title="Editar evento">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button type="button" class="js-day-event-delete p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50" title="Cancelar evento">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>` : ''}
       </div>
-      <div class="text-xs font-medium text-slate-700">${escapeHtml(it.title)}</div>
-      <div class="text-[10px] text-slate-400 mt-0.5">${timeLabel}${location ? ' · ' + escapeHtml(location) : ''}</div>
     `;
-    if (clickable) row.addEventListener('click', () => { closeCalendarDayModal(); openCalendarEventModal('edit', it.raw); });
+    if (editable) {
+      row.querySelector('.js-day-event-edit').addEventListener('click', () => { closeCalendarDayModal(); openCalendarEventModal('edit', it.raw); });
+      row.querySelector('.js-day-event-delete').addEventListener('click', () => {
+        if (!confirm(`¿Cancelar el evento "${it.title}"? Esta acción no se puede deshacer.`)) return;
+        deleteEventFromGoogleIfLinked(it.raw).catch(() => {}).then(() => idbDeleteCalendarEvent(it.raw.id)).then(() => {
+          closeCalendarDayModal();
+          renderCalendarPanel();
+        });
+      });
+    }
     list.appendChild(row);
   });
   document.getElementById('calendarDayModalAddBtn').onclick = () => { closeCalendarDayModal(); openCalendarEventModal('add', null, date); };
@@ -3701,13 +3730,14 @@ document.getElementById('calendarEventForm').addEventListener('submit', (e) => {
   idbPutCalendarEvent(event).then(() => {
     closeCalendarEventModal();
     renderCalendarPanel();
-    return pushEventToGoogleIfConnected(event).catch((err) => console.warn('No se pudo enviar el evento a Google Calendar:', err && err.message));
+    return syncEventToGoogleIfConnected(event).catch((err) => console.warn('No se pudo enviar el evento a Google Calendar:', err && err.message));
   });
 });
 document.getElementById('calendarEventDeleteBtn').addEventListener('click', () => {
   if (!calendarEventEditingId) return;
-  if (!confirm('¿Eliminar este evento?')) return;
-  idbDeleteCalendarEvent(calendarEventEditingId).then(() => {
+  if (!confirm('¿Cancelar este evento? Esta acción no se puede deshacer.')) return;
+  const existing = CALENDAR_EVENTS.find(ev => ev.id === calendarEventEditingId);
+  deleteEventFromGoogleIfLinked(existing).catch(() => {}).then(() => idbDeleteCalendarEvent(calendarEventEditingId)).then(() => {
     closeCalendarEventModal();
     renderCalendarPanel();
   });
@@ -3845,23 +3875,49 @@ function fetchGoogleCalendarEvents() {
     }))).catch(() => []);
   });
 }
-function pushEventToGoogleIfConnected(event) {
-  if (!googleAccessToken || event.googleEventId) return Promise.resolve();
-  return ensureGoogleTokenFresh().then(() => pushEventToGoogleNow(event));
-}
-function pushEventToGoogleNow(event) {
+/* Crea el evento en Google si es nuevo, o actualiza el que ya existía
+   allá si se está editando uno que ya se había enviado — antes solo
+   creaba una vez y nunca volvía a tocar Google, así que editar el
+   título/hora aquí dejaba la copia de Google con los datos viejos. */
+function syncEventToGoogleIfConnected(event) {
   if (!googleAccessToken) return Promise.resolve();
-  const body = event.allDay
-    ? { summary: event.title, description: event.description, location: event.location, start: { date: dateKey(new Date(event.startAt)) }, end: { date: dateKey(new Date(event.startAt)) } }
-    : { summary: event.title, description: event.description, location: event.location,
-        start: { dateTime: new Date(event.startAt).toISOString() },
-        end: { dateTime: new Date(event.endAt || event.startAt + 3600000).toISOString() } };
-  return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }).then(res => res.ok ? res.json() : null).then(created => {
-    if (created && created.id) { event.googleEventId = created.id; return idbPutCalendarEvent(event); }
+  return ensureGoogleTokenFresh().then(() => {
+    if (!googleAccessToken) return;
+    const body = event.allDay
+      ? { summary: event.title, description: event.description, location: event.location, start: { date: dateKey(new Date(event.startAt)) }, end: { date: dateKey(new Date(event.startAt)) } }
+      : { summary: event.title, description: event.description, location: event.location,
+          start: { dateTime: new Date(event.startAt).toISOString() },
+          end: { dateTime: new Date(event.endAt || event.startAt + 3600000).toISOString() } };
+    const url = event.googleEventId
+      ? `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event.googleEventId}`
+      : 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+    return fetch(url, {
+      method: event.googleEventId ? 'PATCH' : 'POST',
+      headers: { Authorization: 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(res => res.ok ? res.json() : null).then(result => {
+      if (result && result.id && !event.googleEventId) {
+        event.googleEventId = result.id;
+        // Sin este refresco, CALENDAR_EVENTS se queda con la copia de antes
+        // de tener googleEventId — la próxima vez que se edite este mismo
+        // evento no se enteraría de que ya está enlazado y volvería a
+        // CREAR uno nuevo en Google en vez de actualizar el que ya existe.
+        return idbPutCalendarEvent(event).then(() => renderCalendarPanel());
+      }
+    });
+  });
+}
+/* Cancela (borra) el evento también del lado de Google cuando estaba
+   enlazado — si no se hace esto, "cancelar" aquí dejaba la reunión
+   viva en el Google Calendar real de quien la creó. */
+function deleteEventFromGoogleIfLinked(event) {
+  if (!event || !event.googleEventId || !googleAccessToken) return Promise.resolve();
+  return ensureGoogleTokenFresh().then(() => {
+    if (!googleAccessToken) return;
+    return fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${event.googleEventId}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + googleAccessToken },
+    }).catch(() => {});
   });
 }
 updateGoogleCalendarUI();
