@@ -307,7 +307,7 @@
       </div>
       <div id="invGrid" class="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-2.5 content-start"></div>
       <div class="px-3 py-2.5 border-t border-slate-200 text-[11px] text-slate-400 leading-snug">
-        Arrastra un equipo hacia el tablero para agregarlo. Haz clic en un objeto del tablero para moverlo, rotarlo o eliminarlo.
+        Arrastra un equipo hacia el tablero para agregarlo (o tócalo para agregarlo al centro, en celular). Haz clic en un objeto del tablero para moverlo, rotarlo o eliminarlo.
       </div>
     </aside>
 
@@ -1667,6 +1667,23 @@ function addItemToCanvas(itemDef, left, top) {
   }
 }
 
+/* Arrastrar desde el panel hasta el tablero (drag & drop nativo del
+   navegador) no funciona con el dedo en celular/tablet — ahí no hay
+   `dragstart`/`drop` táctil. Como alternativa, un toque/clic sobre la
+   tarjeta agrega el objeto directo al centro de lo que se ve del
+   tablero en ese momento (ya con zoom y desplazamiento aplicados), y
+   desde ahí se mueve normal arrastrándolo con el dedo como cualquier
+   objeto ya puesto. Un pequeño desplazamiento en cada toque evita que
+   varios objetos agregados seguidos queden todos exactamente encima. */
+let tapToAddOffsetIndex = 0;
+function addItemToCanvasAtViewCenter(itemDef) {
+  const center = canvas.getVpCenter();
+  const step = 18;
+  const cascade = (tapToAddOffsetIndex % 6) * step;
+  tapToAddOffsetIndex++;
+  addItemToCanvas(itemDef, center.x + cascade, center.y + cascade);
+}
+
 /* ---------------------------------------------------------
    FLECHAS — line + triangle head(s) grouped into one object.
    Only the rotate handle + the two side (ml/mr) stretch handles
@@ -1922,6 +1939,7 @@ function renderInventory() {
     card.draggable = true;
     card.innerHTML = `<div class="w-12 h-12">${iconSVG(item.shape, cat.color)}</div><span class="text-[10px] text-center text-slate-600 leading-tight">${item.name}</span>`;
     card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('itemId', item.id); e.dataTransfer.effectAllowed = 'copy'; });
+    card.addEventListener('click', () => addItemToCanvasAtViewCenter(item));
     invGrid.appendChild(card);
   });
 
@@ -1991,6 +2009,7 @@ function renderCustomItemCards() {
       <span class="text-[9px] text-slate-400">${dbItem.code}</span>
     `;
     card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('itemId', dbItem.id); e.dataTransfer.effectAllowed = 'copy'; });
+    card.addEventListener('click', () => addItemToCanvasAtViewCenter(dbItem));
     card.querySelector('.js-edit-item').addEventListener('click', (e) => {
       e.stopPropagation();
       openItemModal('edit', cat.id, dbItem);
