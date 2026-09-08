@@ -1402,6 +1402,17 @@ function idbResetItemCodeCounters() {
 function idbGetAllItems() {
   return sb.from('items').select('*').then(sbResult);
 }
+/* Las fotos (imageDataUrl/image3DDataUrl) son, con mucho, lo más pesado de
+   cada fila — pueden sumar varios MB entre todos los objetos. Separar la
+   consulta en "datos" (rápida, deja ver los objetos casi al instante) y
+   "fotos" (pesada, se trae aparte y se va rellenando cuando llega) evita
+   que la página entera quede esperando esa descarga para mostrar algo. */
+function idbGetAllItemsMeta() {
+  return sb.from('items').select('id,categoryId,code,name,subline,description,priceNoTax,quoteCategory,datasheetUrl,createdAt').then(sbResult);
+}
+function idbGetAllItemImages() {
+  return sb.from('items').select('id,imageDataUrl,image3DDataUrl').then(sbResult);
+}
 function idbPutQuote(quote) {
   return sb.from('quotes').upsert(quote).then(sbResult).then(() => quote);
 }
@@ -1481,13 +1492,23 @@ function sbUpdateProfile(id, patch) {
    view. Kept in sync directly (no re-fetch) whenever an item is saved or
    deleted, from wherever that happens. */
 const CUSTOM_ITEMS_BY_ID = {};
-idbGetAllItems().then(items => {
+idbGetAllItemsMeta().then(items => {
   items.forEach(it => { CUSTOM_ITEMS_BY_ID[it.id] = it; });
   rebuildQuote();
   // renderInventory()/renderInventoryTable() ya se llamaron una vez al
   // cargar la página, antes de que esta consulta terminara — se vuelven a
   // llamar aquí para que la categoría/tabla que se esté viendo se actualice
-  // con el inventario completo apenas está disponible.
+  // con el inventario completo apenas está disponible (todavía sin fotos).
+  renderInventory();
+  renderInventoryTable();
+  return idbGetAllItemImages();
+}).then(images => {
+  images.forEach(img => {
+    const it = CUSTOM_ITEMS_BY_ID[img.id];
+    if (it) { it.imageDataUrl = img.imageDataUrl; it.image3DDataUrl = img.image3DDataUrl; }
+  });
+  // Las fotos ya llegaron — se vuelve a pintar todo para que aparezcan.
+  rebuildQuote();
   renderInventory();
   renderInventoryTable();
 });
@@ -5066,11 +5087,18 @@ function removeBackgroundAndCrop(dataUrl) {
     const img = new Image();
     img.onload = () => {
       try {
-        const w = img.naturalWidth, h = img.naturalHeight;
+        // Las fotos de celular/cámara pueden venir en varios miles de px de
+        // lado — eso no aporta nada al verse como ícono de ~64px o textura
+        // 3D, y sí infla mucho lo que se guarda en la base de datos (se
+        // multiplica por cada objeto y se descarga entero al abrir la app).
+        // Se limita el lado más largo antes de procesar.
+        const MAX_DIM = 1200;
+        const scale = Math.min(1, MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, w, h);
         const imageData = ctx.getImageData(0, 0, w, h);
         const data = imageData.data;
 
@@ -5183,6 +5211,26 @@ function makeSquare3DImage(dataUrl) {
   });
 }
 
+/* Mismo límite de tamaño que removeBackgroundAndCrop, para los dos casos
+   que se saltan esa función: "usar imagen original" y cuando el recorte
+   automático falla y se cae a la imagen tal cual se subió. */
+function resizeDataUrlIfNeeded(dataUrl, maxDim) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      if (scale >= 1) { resolve(dataUrl); return; }
+      const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 const itemBgProcessingStatus = document.getElementById('itemBgProcessingStatus');
 const itemBgRemovedStatus = document.getElementById('itemBgRemovedStatus');
 const itemBgNotUniformStatus = document.getElementById('itemBgNotUniformStatus');
@@ -5223,9 +5271,11 @@ itemImageInput.addEventListener('change', () => {
       }
       updateItemImagePreview();
     }).catch(() => {
-      itemModalImageDataUrl = reader.result;
-      hideBgStatusMessages();
-      updateItemImagePreview();
+      resizeDataUrlIfNeeded(reader.result, 1200).then(dataUrl => {
+        itemModalImageDataUrl = dataUrl;
+        hideBgStatusMessages();
+        updateItemImagePreview();
+      });
     });
   };
   reader.readAsDataURL(file);
@@ -5233,11 +5283,13 @@ itemImageInput.addEventListener('change', () => {
 
 itemUseOriginalBtn.addEventListener('click', () => {
   if (!itemModalRawImageDataUrl) return;
-  itemModalImageDataUrl = itemModalRawImageDataUrl;
-  itemModalConvertedFlag = false;
-  hideBgStatusMessages();
-  itemUseOriginalBtn.classList.add('hidden');
-  updateItemImagePreview();
+  resizeDataUrlIfNeeded(itemModalRawImageDataUrl, 1200).then(dataUrl => {
+    itemModalImageDataUrl = dataUrl;
+    itemModalConvertedFlag = false;
+    hideBgStatusMessages();
+    itemUseOriginalBtn.classList.add('hidden');
+    updateItemImagePreview();
+  });
 });
 
 itemConvertPngBtn.addEventListener('click', () => {
