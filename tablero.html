@@ -238,15 +238,15 @@
 
   <!-- VIEW TABS -->
   <div class="h-10 shrink-0 bg-white border-b border-slate-200 flex items-center gap-1 px-4 overflow-x-auto">
-    <button id="tabBtnProductos" class="text-xs font-semibold px-4 py-2 border-b-2 border-sky-500 text-sky-600 transition-colors">Productos</button>
-    <button id="tabBtnInventario" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Inventario</button>
-    <button id="tabBtnCotizaciones" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Panel Cotizaciones</button>
-    <button id="tabBtnPipeline" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Pipeline</button>
-    <button id="tabBtnCalendario" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Calendario</button>
-    <button id="tabBtnKanban" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero Kanban</button>
-    <button id="tabBtnEquipo" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Equipo Comercial</button>
-    <button id="tabBtnTablero3D" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Tablero 3D</button>
-    <button id="tabBtnUsuarios" class="text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors">Usuarios</button>
+    <a id="tabBtnProductos" href="#productos" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-sky-500 text-sky-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Productos</a>
+    <a id="tabBtnInventario" href="#inventario" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Inventario</a>
+    <a id="tabBtnCotizaciones" href="#cotizaciones" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Panel Cotizaciones</a>
+    <a id="tabBtnPipeline" href="#pipeline" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Pipeline</a>
+    <a id="tabBtnCalendario" href="#calendario" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Calendario</a>
+    <a id="tabBtnKanban" href="#kanban" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Tablero Kanban</a>
+    <a id="tabBtnEquipo" href="#equipo" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Equipo Comercial</a>
+    <a id="tabBtnTablero3D" href="#tablero3d" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Tablero 3D</a>
+    <a id="tabBtnUsuarios" href="#usuarios" class="no-underline text-xs font-semibold px-4 py-2 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-colors" title="Clic derecho → Abrir enlace en pestaña nueva, para tener esto y otra sección abiertas al tiempo">Usuarios</a>
   </div>
 
   <!-- MAIN -->
@@ -1292,9 +1292,15 @@ requireAuthAndRole().then(() => {
   // aunque esa haya sido la última pestaña que tuvo abierta antes de que
   // le cambiaran el rol.
   try {
+    // La URL (#calendario, etc.) manda sobre la última pestaña usada —
+    // así, una pestaña del navegador abierta apuntando a una sección
+    // específica (ver bindTabLink más abajo) abre directo ahí en vez de
+    // saltar a la última que se usó en OTRA pestaña del navegador.
+    const hashTab = location.hash.replace('#', '');
     const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
-    if (savedTab && TAB_VIEWS[savedTab] && (savedTab !== 'usuarios' || CURRENT_ROLE === 'admin')) {
-      setActiveTab(savedTab);
+    const targetTab = TAB_VIEWS[hashTab] ? hashTab : savedTab;
+    if (targetTab && TAB_VIEWS[targetTab] && (targetTab !== 'usuarios' || CURRENT_ROLE === 'admin')) {
+      setActiveTab(targetTab);
     }
   } catch {}
 });
@@ -2438,6 +2444,14 @@ function setActiveTab(tab) {
     btn.classList.toggle('text-slate-400', !active);
   });
   try { localStorage.setItem(ACTIVE_TAB_KEY, tab); } catch {}
+  // Refleja la pestaña actual en la URL (sin agregar una entrada nueva al
+  // historial) — así, clic derecho → "Abrir enlace en pestaña nueva" (o
+  // Ctrl/Cmd+clic) sobre cualquier pestaña de arriba abre esa sección en
+  // una pestaña del NAVEGADOR aparte, dejando esta tal como estaba.
+  // OJO: usar window.history explícito — hay una variable local "history"
+  // (el arreglo de deshacer/rehacer del tablero 2D) que tapa el objeto
+  // global del navegador si se escribe solo "history".
+  try { window.history.replaceState(null, '', '#' + tab); } catch {}
   if (tab === 'productos') requestAnimationFrame(resizeCanvas);
   else if (tab === 'inventario') renderInventoryTable();
   else if (tab === 'cotizaciones') renderQuotesPanel();
@@ -2448,7 +2462,24 @@ function setActiveTab(tab) {
   else if (tab === 'tablero3d') requestAnimationFrame(activate3DRoom);
   else if (tab === 'usuarios') renderUsersPanel();
 }
-tabBtnProductos.addEventListener('click', () => {
+/* Los botones de pestaña son enlaces (<a href="#...">) para poder abrirlos
+   en una pestaña NUEVA del navegador (clic derecho → "Abrir enlace en
+   pestaña nueva", Ctrl/Cmd+clic, o clic con la rueda del mouse) y así
+   tener, por ejemplo, el tablero en una pestaña y el calendario en otra al
+   mismo tiempo. Un clic normal (sin tecla) sigue cambiando de sección aquí
+   mismo, como siempre — solo se deja pasar el comportamiento nativo del
+   navegador cuando se pide explícitamente abrir en otro lado. */
+function isPlainTabClick(e) {
+  return !(e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button === 1);
+}
+function bindTabLink(btn, onPlainClick) {
+  btn.addEventListener('click', (e) => {
+    if (!isPlainTabClick(e)) return;
+    e.preventDefault();
+    onPlainClick();
+  });
+}
+bindTabLink(tabBtnProductos, () => {
   const alreadyOnProductos = !viewProductos.classList.contains('hidden');
   setActiveTab('productos');
   // Al entrar por primera vez desde otra pestaña, ocultar el panel para dar
@@ -2457,14 +2488,14 @@ tabBtnProductos.addEventListener('click', () => {
   leftPanelCollapsed = alreadyOnProductos ? !leftPanelCollapsed : true;
   setPanelCollapsed([catRailEl, invPanelEl], leftPanelToggleIcon, leftPanelCollapsed);
 });
-tabBtnInventario.addEventListener('click', () => setActiveTab('inventario'));
-tabBtnCotizaciones.addEventListener('click', () => setActiveTab('cotizaciones'));
-tabBtnPipeline.addEventListener('click', () => setActiveTab('pipeline'));
-tabBtnCalendario.addEventListener('click', () => setActiveTab('calendario'));
-tabBtnKanban.addEventListener('click', () => setActiveTab('kanban'));
-tabBtnEquipo.addEventListener('click', () => setActiveTab('equipo'));
-tabBtnTablero3D.addEventListener('click', () => setActiveTab('tablero3d'));
-tabBtnUsuarios.addEventListener('click', () => setActiveTab('usuarios'));
+bindTabLink(tabBtnInventario, () => setActiveTab('inventario'));
+bindTabLink(tabBtnCotizaciones, () => setActiveTab('cotizaciones'));
+bindTabLink(tabBtnPipeline, () => setActiveTab('pipeline'));
+bindTabLink(tabBtnCalendario, () => setActiveTab('calendario'));
+bindTabLink(tabBtnKanban, () => setActiveTab('kanban'));
+bindTabLink(tabBtnEquipo, () => setActiveTab('equipo'));
+bindTabLink(tabBtnTablero3D, () => setActiveTab('tablero3d'));
+bindTabLink(tabBtnUsuarios, () => setActiveTab('usuarios'));
 
 /* ---------------------------------------------------------
    DOCUMENTO DE COTIZACIÓN — versión elegante para el cliente:
