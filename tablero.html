@@ -103,6 +103,26 @@
     display: none !important;
   }
 
+  /* En el celular, "100vh" (lo que usa Tailwind h-screen) mide el alto de
+     la pantalla completa SIN la barra de direcciones del navegador — pero
+     esa barra sí ocupa espacio real mientras está visible, así que el
+     contenedor quedaba más alto que lo que en realidad se ve, empujando
+     cosas pegadas abajo (como el total y el botón "Generar cotización")
+     fuera de la pantalla, sin poder desplazarse para alcanzarlas. "dvh" sí
+     tiene en cuenta esa barra; se deja "vh" primero como respaldo para
+     navegadores viejos que no conocen "dvh".*/
+  #appRoot {
+    height: 100vh;
+    height: 100dvh;
+  }
+  /* Mismo problema, mismo arreglo, para los modales que limitan su alto en
+     "vh" (podían quedar más altos que lo que en verdad se ve en el celular
+     con la barra de direcciones visible, dejando sus botones de abajo
+     fuera de alcance). */
+  #picker3DModal > div { max-height: 80vh; max-height: 80dvh; }
+  #quoteDocModal > div, #quoteEditModal > div { max-height: 92vh; max-height: 92dvh; }
+  #deletedItemsModal > div { max-height: 85vh; max-height: 85dvh; }
+
   /* En pantallas angostas (celular), la barra de arriba tiene más botones
      de los que caben en una sola fila y no había forma de deslizarla —
      los últimos quedaban recortados fuera de la pantalla, inalcanzables.
@@ -137,7 +157,7 @@
   Verificando acceso…
 </div>
 
-<div class="h-screen w-screen flex flex-col">
+<div id="appRoot" class="h-screen w-screen flex flex-col">
 
   <!-- TOP TOOLBAR -->
   <header id="mainToolbar" class="h-14 shrink-0 bg-slate-900 text-white flex items-center gap-3 px-4 z-30">
