@@ -3538,7 +3538,16 @@ function buildCalendarItems(events, tasks, prospects, googleEvents) {
     if (!p.nextActivityAt) return;
     items.push({ kind: 'prospect', id: 'p_' + p.id, title: p.contactName + (p.nextActivityNote ? ' — ' + p.nextActivityNote : ''), startAt: p.nextActivityAt, allDay: true, color: 'amber', raw: p });
   });
-  (googleEvents || []).forEach(ge => items.push({ kind: 'google', id: ge.id, title: ge.title, startAt: ge.startAt, allDay: ge.allDay, location: ge.location, color: 'emerald', raw: ge }));
+  // Un evento creado aquí y ya enviado a Google Calendar existe en los dos
+  // lados: como fila propia (con su googleEventId) y como el evento real
+  // que trae la consulta en vivo a Google. Sin este filtro salía dos veces
+  // — se descarta la copia de Google y se deja la propia, que es la que
+  // sigue esta app cuando se edita (la copia de Google no se actualiza
+  // sola si se cambia el título/hora solo aquí).
+  const alreadyLinkedGoogleIds = new Set(events.filter(e => e.googleEventId).map(e => e.googleEventId));
+  (googleEvents || [])
+    .filter(ge => !alreadyLinkedGoogleIds.has(ge.googleEventId))
+    .forEach(ge => items.push({ kind: 'google', id: ge.id, title: ge.title, startAt: ge.startAt, allDay: ge.allDay, location: ge.location, color: 'emerald', raw: ge }));
   return items;
 }
 function groupCalendarItemsByDay(items) {
