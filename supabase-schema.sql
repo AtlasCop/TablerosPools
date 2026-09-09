@@ -154,6 +154,21 @@ create table if not exists calendar_events (
 );
 create index if not exists calendar_events_startat_idx on calendar_events ("startAt");
 
+-- Guarda el "refresh token" de Google Calendar de cada persona — el que
+-- permite renovar la conexión sola, de verdad, sin depender de que el
+-- navegador lo permita (a diferencia del token de acceso normal, que dura
+-- ~1 hora y cuya renovación silenciosa el navegador puede bloquear). Solo
+-- lo tocan las Edge Functions (google-oauth-exchange/google-oauth-refresh)
+-- usando la service role key, que pasa por encima de RLS — por eso esta
+-- tabla no tiene ninguna política: nadie puede leerla ni escribirla
+-- directamente desde la app, ni con su propia sesión.
+create table if not exists google_oauth_tokens (
+  "userId" uuid primary key references auth.users(id) on delete cascade,
+  "refreshToken" text not null,
+  "updatedAt" timestamptz not null default now()
+);
+alter table google_oauth_tokens enable row level security;
+
 -- Tareas del Tablero Kanban
 create table if not exists kanban_tasks (
   id text primary key,

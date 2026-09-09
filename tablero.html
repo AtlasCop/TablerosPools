@@ -43,7 +43,6 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   html, body { height: 100%; margin: 0; overflow: hidden; }
   #boardWrap { touch-action: none; }
@@ -1335,6 +1334,11 @@ function requireAuthAndRole() {
 }
 requireAuthAndRole().then(() => {
   if (!CURRENT_ROLE) return; // sin sesión confirmada — ya se redirigió a index.html
+  // Si la URL trae "?code=..." es porque se acaba de volver de autorizar
+  // Google Calendar; si no, intenta restaurar una conexión ya guardada de
+  // antes (ver handleGoogleOAuthRedirect más abajo). Necesita la sesión de
+  // Supabase ya confirmada, por eso va aquí y no más arriba.
+  handleGoogleOAuthRedirect();
   // Vuelve a la pestaña donde estaba antes de recargar (Productos ya es la
   // que se ve por defecto en el HTML, así que solo hace falta actuar si
   // era otra) — nunca restaura "Usuarios" para quien no es administrador,
@@ -3510,25 +3514,29 @@ document.getElementById('btnCreateProspectFromQuote').addEventListener('click', 
    CALENDARIO — vista de mes con: eventos propios, fechas límite de
    tareas del Tablero Kanban, próxima actividad de prospectos (Pipeline)
    y, si está conectado, eventos del Google Calendar de quien inició
-   sesión. La conexión con Google usa Google Identity Services (OAuth
-   2.0 solo del lado del navegador, sin backend) — el token que entrega
-   dura ~1 hora y vive solo en esta pestaña, nunca en la base de datos;
-   cada quien conecta su propia cuenta de Google. Como ese token se vence
-   tan seguido, se renueva solo en segundo plano (sin pedirle nada a
-   quien esté usando la página) un rato antes de que caduque, y también
-   justo antes de cada uso si por lo que sea la renovación en segundo
-   plano no alcanzó a correr (por ejemplo, si la pestaña estuvo en
-   segundo plano y el navegador le bajó la prioridad a sus temporizadores).
+   sesión.
+
+   La conexión con Google usa el flujo de "código de autorización" (no
+   el implícito de antes) — Google entrega un código de un solo uso que
+   se manda a dos Edge Functions de Supabase (google-oauth-exchange /
+   google-oauth-refresh), que son las únicas que guardan el
+   refresh_token de verdad y renuevan el acceso llamando a Google
+   directamente, servidor a servidor. Esto reemplaza la versión anterior
+   (Google Identity Services, "prompt: silent" en el navegador), que
+   dependía de que el navegador permitiera una verificación silenciosa
+   con Google — cada vez más bloqueada por Chrome/Safari por privacidad,
+   lo que hacía que la conexión se cayera sola y pidiera iniciar sesión
+   de nuevo sin aviso. Con el refresh_token viviendo en el servidor, la
+   conexión no depende en nada del navegador y no se cae sola.
 --------------------------------------------------------- */
 const GOOGLE_CALENDAR_CLIENT_ID = '796504028282-g79e1o0mlcdkao2gn0m0h9esgca3kaba.apps.googleusercontent.com';
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const GOOGLE_OAUTH_REDIRECT_URI = location.origin + location.pathname;
 const GOOGLE_TOKEN_KEY = 'google_calendar_token';
 const GOOGLE_TOKEN_EXPIRY_KEY = 'google_calendar_token_expiry';
 let googleAccessToken = null;
-let googleTokenClient = null;
 let googleTokenExpiryAt = 0;
 let googleTokenRefreshTimer = null;
-let googlePendingRefreshResolvers = [];
 try {
   googleAccessToken = sessionStorage.getItem(GOOGLE_TOKEN_KEY) || null;
   googleTokenExpiryAt = Number(sessionStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY)) || 0;
@@ -3806,76 +3814,95 @@ function clearGoogleToken() {
   try { sessionStorage.removeItem(GOOGLE_TOKEN_KEY); sessionStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY); } catch {}
   if (googleTokenRefreshTimer) { clearTimeout(googleTokenRefreshTimer); googleTokenRefreshTimer = null; }
 }
-/* El token dura ~1 hora; se programa renovarlo solo (sin pedir nada a
-   quien esté usando la página) 5 minutos antes de que se venza. Si el
-   navegador le bajó prioridad al temporizador por tener la pestaña en
-   segundo plano y ya se pasó la hora, se renueva ya mismo. */
+/* Le pide a la Edge Function google-oauth-refresh un access_token nuevo,
+   usando el refresh_token que quedó guardado en el servidor la primera
+   vez que se conectó — no depende del navegador para nada, así que
+   funciona igual sin importar cuánto tiempo haya pasado o si es una
+   pestaña nueva. Si el servidor dice que no hay nada guardado (nunca se
+   conectó, o el acceso se revocó/venció), queda como "desconectado" de
+   verdad en vez de insistir con un token muerto. */
+function refreshGoogleAccessToken() {
+  return sb.functions.invoke('google-oauth-refresh', { body: {} }).then(({ data, error }) => {
+    if (error || !data || !data.access_token) {
+      clearGoogleToken();
+      updateGoogleCalendarUI();
+      return;
+    }
+    saveGoogleToken(data.access_token, data.expires_in);
+    updateGoogleCalendarUI();
+    scheduleGoogleTokenRefresh();
+  }).catch(() => {});
+}
+/* El access_token dura ~1 hora; se programa renovarlo solo 5 minutos
+   antes de que se venza, sin pedirle nada a quien esté usando la
+   página. */
 function scheduleGoogleTokenRefresh() {
   if (googleTokenRefreshTimer) { clearTimeout(googleTokenRefreshTimer); googleTokenRefreshTimer = null; }
-  if (!googleAccessToken || !googleTokenExpiryAt || !googleTokenClient) return;
+  if (!googleAccessToken || !googleTokenExpiryAt) return;
   const msUntilRefresh = Math.max(0, googleTokenExpiryAt - Date.now() - 5 * 60 * 1000);
-  googleTokenRefreshTimer = setTimeout(() => {
-    googleTokenClient.requestAccessToken({ prompt: '' });
-  }, msUntilRefresh);
+  googleTokenRefreshTimer = setTimeout(refreshGoogleAccessToken, msUntilRefresh);
 }
 /* Antes de usar el token (traer o crear un evento), confirma que todavía
-   le quede margen — si no, lo renueva primero y solo entonces sigue.
-   Esto es lo que de verdad evita el "se desconectó" que se sentía antes:
-   ya no depende únicamente de que el temporizador de fondo haya alcanzado
-   a correr mientras la pestaña estaba en segundo plano. */
+   le quede margen — si no, lo renueva primero y solo entonces sigue. Es
+   el respaldo por si el temporizador de fondo no alcanzó a correr
+   (pestaña en segundo plano, navegador cerrado y reabierto, etc.). */
 function ensureGoogleTokenFresh() {
   if (!googleAccessToken) return Promise.resolve();
   if (Date.now() < googleTokenExpiryAt - 60000) return Promise.resolve();
-  if (!googleTokenClient) return Promise.resolve();
-  return new Promise((resolve) => {
-    googlePendingRefreshResolvers.push(resolve);
-    googleTokenClient.requestAccessToken({ prompt: '' });
-  });
+  return refreshGoogleAccessToken();
 }
-function initGoogleCalendarClient() {
-  if (googleTokenClient || !GOOGLE_CALENDAR_CLIENT_ID || !window.google || !window.google.accounts) return;
-  googleTokenClient = google.accounts.oauth2.initTokenClient({
+/* Manda a Google a iniciar sesión y autorizar el acceso al calendario.
+   access_type=offline + prompt=consent son los que hacen que Google
+   entregue un refresh_token de verdad (si no se fuerza prompt=consent,
+   solo lo manda la primera vez que alguien autoriza la app). Google
+   redirige de vuelta a esta misma página con "?code=..." en la URL —
+   eso lo recoge handleGoogleOAuthRedirect() al cargar. */
+function connectGoogleCalendar() {
+  const params = new URLSearchParams({
     client_id: GOOGLE_CALENDAR_CLIENT_ID,
+    redirect_uri: GOOGLE_OAUTH_REDIRECT_URI,
+    response_type: 'code',
     scope: GOOGLE_CALENDAR_SCOPE,
-    callback: (resp) => {
-      if (resp && resp.access_token) {
-        saveGoogleToken(resp.access_token, resp.expires_in);
-        updateGoogleCalendarUI();
-        scheduleGoogleTokenRefresh();
-        renderCalendarPanel();
-      } else {
-        // La renovación silenciosa falló (por ejemplo, se revocó el acceso
-        // desde la cuenta de Google) — se limpia en vez de seguir mostrando
-        // "conectado" cuando ya no es cierto.
-        clearGoogleToken();
-        updateGoogleCalendarUI();
-      }
-      const resolvers = googlePendingRefreshResolvers;
-      googlePendingRefreshResolvers = [];
-      resolvers.forEach(r => r());
-    },
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
   });
-  // Si ya había un token de una carga anterior de esta misma pestaña,
-  // programa su renovación en vez de esperar a que alguien haga algo.
-  if (googleAccessToken) scheduleGoogleTokenRefresh();
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
 }
-/* El script de Google (accounts.google.com/gsi/client) carga async — puede
-   no estar listo todavía cuando se intenta inicializar el cliente al abrir
-   la página. Se reintenta unas cuantas veces en vez de una sola, para no
-   depender de ganarle la carrera al script. */
-(function waitForGoogleIdentityAndInit(attemptsLeft) {
-  if (googleTokenClient || !GOOGLE_CALENDAR_CLIENT_ID) return;
-  if (window.google && window.google.accounts) { initGoogleCalendarClient(); return; }
-  if (attemptsLeft <= 0) return;
-  setTimeout(() => waitForGoogleIdentityAndInit(attemptsLeft - 1), 300);
-})(30);
+/* Se llama una vez al cargar la página (después de confirmar la sesión
+   de Supabase). Si la URL trae "?code=..." es porque se acaba de volver
+   de autorizar en Google — se manda ese código a la Edge Function
+   google-oauth-exchange para cambiarlo por el access_token (y que el
+   servidor guarde el refresh_token). Si no hay código, intenta restaurar
+   solo una conexión ya guardada de antes (de esta sesión o de cualquier
+   otra), sin pedirle nada a quien esté mirando la pantalla. */
+function handleGoogleOAuthRedirect() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if (!code) {
+    if (GOOGLE_CALENDAR_CLIENT_ID) refreshGoogleAccessToken();
+    return;
+  }
+  // Limpia el "code" de la URL enseguida — es de un solo uso y no debe
+  // quedar visible ni reintentarse si se recarga la página.
+  window.history.replaceState(null, '', GOOGLE_OAUTH_REDIRECT_URI + location.hash);
+  sb.functions.invoke('google-oauth-exchange', { body: { code, redirectUri: GOOGLE_OAUTH_REDIRECT_URI } }).then(({ data, error }) => {
+    if (error || !data || !data.access_token) {
+      console.warn('No se pudo completar la conexión con Google Calendar:', error || data);
+      return;
+    }
+    saveGoogleToken(data.access_token, data.expires_in);
+    updateGoogleCalendarUI();
+    scheduleGoogleTokenRefresh();
+    renderCalendarPanel();
+  }).catch((err) => console.warn('No se pudo completar la conexión con Google Calendar:', err && err.message));
+}
 document.getElementById('btnGoogleCalendarConnect').addEventListener('click', () => {
   if (!GOOGLE_CALENDAR_CLIENT_ID) {
     alert('La conexión con Google Calendar todavía no está configurada en esta instalación — faltan las credenciales de Google Cloud.');
     return;
   }
-  if (!googleTokenClient) initGoogleCalendarClient();
-  if (googleTokenClient) googleTokenClient.requestAccessToken({ prompt: googleAccessToken ? '' : 'consent' });
+  connectGoogleCalendar();
 });
 function fetchGoogleCalendarEvents() {
   if (!googleAccessToken) return Promise.resolve([]);
